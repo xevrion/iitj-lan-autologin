@@ -27,7 +27,11 @@ No more random build interruptions.
 Run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xevrion/iitj-lan-autologin/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/xevrion/iitj-lan-autologin/main/bootstrap.sh | bash
+```
+Then:
+```bash
+./install.sh
 ```
 
 You will be prompted once for:
@@ -56,7 +60,7 @@ After installation, re-run the installer to access:
 Example:
 
 ```bash
-bash install.sh
+./install.sh
 ```
 
 ---
@@ -107,7 +111,7 @@ Before running `curl | bash`, always review the source code.
 Run:
 
 ```bash
-bash install.sh
+./install.sh
 ```
 
 Select **Uninstall**.
@@ -123,6 +127,12 @@ This removes:
 ## Version
 
 Current version: v1.0.0
+
+---
+
+## License
+
+[MIT License](LICENSE)
 
 ---
 
