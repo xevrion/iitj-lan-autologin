@@ -14,4 +14,4 @@ chmod +x "$INSTALL_SCRIPT"
 echo "Launching installer..."
 echo
 
-exec bash "$INSTALL_SCRIPT"
+exec bash "$INSTALL_SCRIPT" < /dev/tty
