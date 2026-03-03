@@ -15,5 +15,5 @@ echo "Installer downloaded."
 echo
 echo "Run the installer with:"
 echo
-echo "  bash $INSTALL_SCRIPT"
+echo "  ./$INSTALL_SCRIPT"
 echo
