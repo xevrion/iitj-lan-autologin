@@ -8,10 +8,12 @@ INSTALL_SCRIPT="install.sh"
 echo "Downloading installer..."
 
 curl -fsSL "$REPO_URL/$INSTALL_SCRIPT" -o "$INSTALL_SCRIPT"
-
 chmod +x "$INSTALL_SCRIPT"
 
-echo "Launching installer..."
 echo
-
-exec bash "$INSTALL_SCRIPT" < /dev/tty
+echo "Installer downloaded."
+echo
+echo "Run the installer with:"
+echo
+echo "  bash $INSTALL_SCRIPT"
+echo
