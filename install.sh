@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 
-set -e
-
 APP_NAME="iitj-login"
-VERSION="2.0.0"
+VERSION="3.0.0"
 
 BASE_DIR="$HOME/.local/share/$APP_NAME"
 SERVICE_DIR="$HOME/.config/systemd/user"
@@ -15,7 +13,10 @@ KEY_FILE="$BASE_DIR/key.bin"
 POST_URL="https://gateway.iitj.ac.in:1003/"
 LOGOUT_URL="https://gateway.iitj.ac.in:1003/logout"
 
-INTERFACE="enp7s0"   # change if needed
+# populated by detect_interface / get_nm_connection / get_gateway
+INTERFACE=""
+CONN=""
+GW=""
 
 print_banner() {
 cat << "EOF"
@@ -30,7 +31,6 @@ $$$$$$/ $$$$$$/ $$$$$$$$/ $$$$$ |
 / $$   |/ $$   |   $$ |$$    $$/
 $$$$$$/ $$$$$$/    $$/  $$$$$$/
 EOF
-
 cat <<EOF
 ==========================================
  IITJ Ethernet Auto Login Installer v$VERSION
@@ -39,31 +39,126 @@ EOF
 }
 
 check_dependencies() {
-    for cmd in curl openssl sed systemctl python3 nmcli; do
-        if ! command -v $cmd >/dev/null 2>&1; then
-            echo "Missing dependency: $cmd"
+    for cmd in curl openssl systemctl; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            echo "Missing dependency: $cmd — please install it and re-run."
             exit 1
         fi
     done
 }
 
+detect_interface() {
+    # prefer common ethernet prefixes over wireless (wl) and loopback (lo)
+    INTERFACE=$(ip -o link show up 2>/dev/null \
+        | awk -F': ' '{print $2}' \
+        | grep -E '^(eth|enp|ens|eno|em)' \
+        | head -1)
+
+    if [ -z "$INTERFACE" ]; then
+        echo "Could not auto-detect ethernet interface."
+        read -rp "Enter interface name (e.g. eth0, enp7s0): " INTERFACE
+    fi
+
+    echo "Interface: $INTERFACE"
+}
+
+get_gateway() {
+    GW=$(ip route show dev "$INTERFACE" 2>/dev/null \
+        | awk '/^default/ {print $3}' | head -1)
+
+    # fallback to global default route
+    if [ -z "$GW" ]; then
+        GW=$(ip route 2>/dev/null \
+            | awk '/^default via/ {print $3}' | head -1)
+    fi
+}
+
+get_nm_connection() {
+    command -v nmcli >/dev/null 2>&1 || return
+    CONN=$(nmcli -g NAME,DEVICE con show --active 2>/dev/null \
+        | awk -F: -v iface="$INTERFACE" '$2 == iface {print $1}' \
+        | head -1)
+}
+
 fix_mac_randomization() {
-    echo "Fixing MAC randomization (important for Fedora)..."
-    nmcli connection modify "Wired connection 1" ethernet.cloned-mac-address permanent || true
+    # fedora randomizes ethernet mac by default — fortigate auths by mac so this breaks sessions
+    if ! command -v nmcli >/dev/null 2>&1; then
+        echo "nmcli not found — skipping MAC fix (not needed on most non-Fedora distros)"
+        return
+    fi
+
+    if [ -z "$CONN" ]; then
+        echo "No active NM connection found for $INTERFACE — skipping MAC fix"
+        return
+    fi
+
+    nmcli connection modify "$CONN" ethernet.cloned-mac-address permanent 2>/dev/null && \
+        echo "MAC randomization disabled for: $CONN" || true
+}
+
+check_docker_conflict() {
+    # docker's default bridge (172.17.x.x) can shadow the fortigate captive portal ip
+    # which fortigate's dns interception returns in the same range
+    command -v docker >/dev/null 2>&1 || return
+
+    BRIDGE_IP=$(ip addr show docker0 2>/dev/null \
+        | awk '/inet / {print $2}' | cut -d/ -f1)
+    [ -z "$BRIDGE_IP" ] && return
+
+    if echo "$BRIDGE_IP" | grep -qE '^172\.(1[6-9]|2[0-9]|3[01])\.'; then
+        echo ""
+        echo "WARNING: Docker bridge (docker0) is using $BRIDGE_IP"
+        echo "This conflicts with FortiGate's captive portal IP range."
+        echo "Fix it with (requires sudo):"
+        echo ""
+        echo "  sudo mkdir -p /etc/docker"
+        echo '  sudo tee /etc/docker/daemon.json <<'"'"'EOF'"'"
+        echo '  { "default-address-pools": [{ "base": "10.200.0.0/16", "size": 24 }] }'
+        echo '  EOF'
+        echo "  sudo systemctl restart docker && docker network prune -f"
+        echo ""
+    fi
+}
+
+fix_routing() {
+    # the captive portal hostname resolves (via fortigate dns interception) to an ip
+    # that may route via wifi or a virtual bridge instead of the ethernet interface.
+    # pin that ip to the real gateway so logins always reach fortigate.
+    [ -z "$CONN" ] && return
+    [ -z "$GW" ] && return
+
+    PORTAL_IP=$(getent hosts gateway.iitj.ac.in 2>/dev/null \
+        | awk '{print $1}' | head -1)
+    [ -z "$PORTAL_IP" ] && return
+
+    ROUTE_DEV=$(ip route get "$PORTAL_IP" 2>/dev/null \
+        | awk '{for(i=1;i<NF;i++) if($i=="dev") print $(i+1)}' | head -1)
+
+    if [ "$ROUTE_DEV" != "$INTERFACE" ]; then
+        echo "Portal IP $PORTAL_IP routes via '$ROUTE_DEV' — pinning to $INTERFACE..."
+        nmcli connection modify "$CONN" \
+            +ipv4.routes "$PORTAL_IP/32 $GW" 2>/dev/null || true
+        nmcli connection down "$CONN" >/dev/null 2>&1 || true
+        sleep 2
+        nmcli connection up "$CONN" >/dev/null 2>&1 || true
+        echo "Route pinned: $PORTAL_IP → $GW via $INTERFACE"
+    else
+        echo "Routing OK — portal routes via $INTERFACE"
+    fi
 }
 
 encrypt_credentials() {
     mkdir -p "$BASE_DIR"
     chmod 700 "$BASE_DIR"
 
-    read -p "Enter IITJ LDAP Username: " USERNAME
-    read -s -p "Enter IITJ LDAP Password: " PASSWORD
+    read -rp "Enter IITJ LDAP Username: " USERNAME
+    read -rs -p "Enter IITJ LDAP Password: " PASSWORD
     echo
 
     openssl rand -base64 32 > "$KEY_FILE"
     chmod 600 "$KEY_FILE"
 
-    echo "$USERNAME:$PASSWORD" | \
+    printf '%s:%s' "$USERNAME" "$PASSWORD" | \
         openssl enc -aes-256-cbc -pbkdf2 -salt \
         -pass file:"$KEY_FILE" \
         -out "$CRED_FILE"
@@ -72,53 +167,53 @@ encrypt_credentials() {
 }
 
 create_login_script() {
-cat > "$LOGIN_SCRIPT" << EOF
+    # bake interface into the script at install time
+    # runtime variables are escaped with \$ so they expand when login.sh runs
+    cat > "$LOGIN_SCRIPT" << EOF
 #!/usr/bin/env bash
-
-set -e
-
-POST_URL="$POST_URL"
-LOGOUT_URL="$LOGOUT_URL"
 
 BASE_DIR="\$HOME/.local/share/iitj-login"
 CRED_FILE="\$BASE_DIR/credentials.enc"
 KEY_FILE="\$BASE_DIR/key.bin"
 
+POST_URL="$POST_URL"
+LOGOUT_URL="$LOGOUT_URL"
 INTERFACE="$INTERFACE"
 
 logout() {
-    curl --interface \$INTERFACE -ks --max-time 5 "\${LOGOUT_URL}?\$(date +%s)" >/dev/null || true
+    curl --interface "\$INTERFACE" -ks --max-time 5 \\
+        "\${LOGOUT_URL}?\$(date +%s)" >/dev/null 2>&1 || true
     exit 0
 }
 
 trap logout SIGINT SIGTERM
 
 get_credentials() {
-    CREDS=\$(openssl enc -aes-256-cbc -d -pbkdf2 \
-        -in "\$CRED_FILE" \
+    CREDS=\$(openssl enc -aes-256-cbc -d -pbkdf2 \\
+        -in "\$CRED_FILE" \\
         -pass file:"\$KEY_FILE")
-
     USERNAME=\$(echo "\$CREDS" | cut -d: -f1)
     PASSWORD=\$(echo "\$CREDS" | cut -d: -f2-)
 }
 
 login_loop() {
     while true; do
-        RESP=\$(curl -s --interface \$INTERFACE \
-            --connect-timeout 10 --max-time 15 \
+        RESP=\$(curl -s --interface "\$INTERFACE" \\
+            --connect-timeout 10 --max-time 15 \\
             http://neverssl.com 2>/dev/null || true)
 
         TOKEN=\$(echo "\$RESP" | grep -o 'fgtauth?[^"]*' | sed 's/fgtauth?//')
 
         if [ -n "\$TOKEN" ]; then
-            PASS_ENC=\$(python3 -c "import urllib.parse; print(urllib.parse.quote('''\$PASSWORD'''))")
-
-            curl --interface \$INTERFACE -k \
-                --connect-timeout 10 --max-time 15 \
-                -X POST "\$POST_URL" \
-                -H "Content-Type: application/x-www-form-urlencoded" \
-                --data "username=\$USERNAME&password=\$PASS_ENC&magic=\$TOKEN&4Tredir=http://neverssl.com" \
-                >/dev/null
+            # --data-urlencode handles special chars in passwords safely
+            curl --interface "\$INTERFACE" -ks \\
+                --connect-timeout 10 --max-time 15 \\
+                -X POST "\$POST_URL" \\
+                --data-urlencode "username=\$USERNAME" \\
+                --data-urlencode "password=\$PASSWORD" \\
+                --data-urlencode "magic=\$TOKEN" \\
+                --data-urlencode "4Tredir=http://neverssl.com" \\
+                -o /dev/null 2>/dev/null || true
 
             echo "[\$(date)] Logged in / refreshed."
         else
@@ -133,25 +228,28 @@ get_credentials
 login_loop
 EOF
 
-chmod +x "$LOGIN_SCRIPT"
+    chmod +x "$LOGIN_SCRIPT"
 }
 
 create_service() {
     mkdir -p "$SERVICE_DIR"
 
-cat > "$SERVICE_FILE" << EOF
+    cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=IITJ LAN Auto Login
 After=network-online.target
 
 [Service]
 ExecStart=$LOGIN_SCRIPT
-Restart=always
-RestartSec=5
+Restart=on-failure
+RestartSec=10
 
 [Install]
 WantedBy=default.target
 EOF
+
+    # enable linger so the service runs without an active login session
+    loginctl enable-linger 2>/dev/null || true
 
     systemctl --user daemon-reload
     systemctl --user enable "$APP_NAME"
@@ -160,11 +258,18 @@ EOF
 
 install_app() {
     check_dependencies
+    detect_interface
+    get_gateway
+    get_nm_connection
     fix_mac_randomization
+    check_docker_conflict
+    fix_routing
     encrypt_credentials
     create_login_script
     create_service
+    echo ""
     echo "Installation complete. Service started."
+    echo "Run this script again to start / stop / uninstall."
 }
 
 start_app() {
@@ -187,15 +292,15 @@ uninstall_app() {
     rm -f "$SERVICE_FILE"
     rm -rf "$BASE_DIR"
     systemctl --user daemon-reload
-    echo "Uninstalled completely."
+    echo "Uninstalled."
 }
 
 is_installed() {
-    systemctl --user list-unit-files | grep -q "$APP_NAME.service"
+    systemctl --user list-unit-files 2>/dev/null | grep -q "$APP_NAME.service"
 }
 
 is_running() {
-    systemctl --user is-active --quiet "$APP_NAME"
+    systemctl --user is-active --quiet "$APP_NAME" 2>/dev/null
 }
 
 main_menu() {
@@ -205,7 +310,7 @@ main_menu() {
     if ! is_installed; then
         echo "1) Install"
         echo "0) Exit"
-        read -p "Choose option: " choice
+        read -rp "Choose option: " choice
         case $choice in
             1) install_app ;;
             0) exit 0 ;;
@@ -222,15 +327,11 @@ main_menu() {
         echo "0) Exit"
         echo
 
-        read -p "Choose option: " choice
+        read -rp "Choose option: " choice
 
         case $choice in
             1)
-                if is_running; then
-                    stop_app
-                else
-                    start_app
-                fi
+                if is_running; then stop_app; else start_app; fi
                 ;;
             2) status_app ;;
             3) uninstall_app ;;
