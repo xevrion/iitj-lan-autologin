@@ -147,6 +147,22 @@ fix_routing() {
     fi
 }
 
+fix_hosts() {
+    # browsers and gnome use glibc (getent) for dns, not the kernel routing or dig.
+    # on fedora with wifi active, glibc resolves gateway.iitj.ac.in via wifi's dns
+    # and gets the real public ips — port 1003 doesn't exist on those.
+    # adding a static /etc/hosts entry bypasses dns entirely for all processes:
+    # browser, gnome captive portal popup, curl — everything gets the right ip.
+    local entry="172.17.0.3 gateway.iitj.ac.in"
+    if grep -q "gateway.iitj.ac.in" /etc/hosts 2>/dev/null; then
+        echo "Hosts entry already present — skipping."
+    else
+        echo "Adding gateway.iitj.ac.in → 172.17.0.3 to /etc/hosts..."
+        echo "$entry" | sudo tee -a /etc/hosts >/dev/null
+        echo "Done — browser captive portal will now load correctly."
+    fi
+}
+
 encrypt_credentials() {
     mkdir -p "$BASE_DIR"
     chmod 700 "$BASE_DIR"
@@ -307,6 +323,7 @@ install_app() {
     fix_mac_randomization
     check_docker_conflict
     fix_routing
+    fix_hosts
     encrypt_credentials
     create_login_script
     create_service

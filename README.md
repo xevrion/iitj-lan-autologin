@@ -25,6 +25,7 @@ Enter your IITJ LDAP credentials once. The installer handles everything else.
 - Disables MAC randomization (critical on Fedora — FortiGate authenticates by MAC)
 - Detects and warns about Docker subnet conflicts
 - Pins captive portal routing to ethernet (prevents WiFi from stealing packets)
+- Adds `gateway.iitj.ac.in` to `/etc/hosts` so the browser portal loads correctly
 - Encrypts credentials with AES-256
 - Installs and starts a systemd user service
 - Enables linger so it runs without an active login session
@@ -97,6 +98,26 @@ docker network prune -f
 
 When both WiFi and Ethernet are active, the captive portal IP can route via WiFi instead of Ethernet. The installer pins the portal IP to the ethernet gateway via a static nmcli route.
 
+### glibc DNS vs kernel DNS: browser portal not loading
+
+`dig` and kernel routing see FortiGate's intercepted DNS (`172.17.0.3`) because those DNS packets go via the ethernet interface. But browsers and GNOME use **glibc** (`getent`) for resolution, which may race WiFi's DNS server and cache the real public IPs for `gateway.iitj.ac.in` instead. Port 1003 doesn't exist on those public IPs — so the captive portal page never loads in the browser, and the GNOME portal popup just spins forever.
+
+Fix: pin the hostname in `/etc/hosts`, bypassing DNS entirely for all processes:
+
+```bash
+echo "172.17.0.3 gateway.iitj.ac.in" | sudo tee -a /etc/hosts
+```
+
+The installer does this automatically.
+
+### The login script's DNS race condition
+
+The same glibc vs kernel DNS split affects `curl` inside the login script. `curl` calls `getaddrinfo()` (glibc) to resolve hostnames, so it can get public IPs even when `dig` returns `172.17.0.3`. The script now:
+
+1. Calls `resolvectl flush-caches` to clear stale entries
+2. Uses `dig +short gateway.iitj.ac.in` immediately after (whose UDP packet FortiGate intercepts on ethernet, returning `172.17.0.3`)
+3. Passes that IP to `curl` via `--resolve gateway.iitj.ac.in:1003:<IP>`, bypassing `getaddrinfo` entirely
+
 ---
 
 ## File locations
@@ -120,7 +141,7 @@ When both WiFi and Ethernet are active, the captive portal IP can route via WiFi
 
 ## Requirements
 
-- `curl`, `openssl`, `systemctl` (all standard on modern Linux)
+- `curl`, `openssl`, `systemctl`, `dig` (all standard on modern Linux)
 - `nmcli` (optional — needed for MAC fix and routing fix, available on NetworkManager distros)
 
 Tested on: Ubuntu 22.04+, Fedora 39+
@@ -129,7 +150,7 @@ Tested on: Ubuntu 22.04+, Fedora 39+
 
 ## Version
 
-v3.0.0
+v3.1.0
 
 ---
 
