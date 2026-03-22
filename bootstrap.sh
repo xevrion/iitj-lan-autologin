@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 # IITJ LAN Auto Login — Linux/macOS bootstrap
 # Usage: curl -fsSL <url>/bootstrap.sh | bash
+#
+# NOTE: If you get an SSL error running this curl command, FortiGate is
+# intercepting HTTPS before you've authenticated. Fix options:
+#   1. Log in once via browser, then re-run this command.
+#   2. Use -k to skip TLS for the bootstrap only:
+#        curl -fsSLk <url>/bootstrap.sh | bash
+#   3. Build manually (no network needed after git clone):
+#        git clone https://github.com/xevrion/iitj-lan-autologin
+#        cd iitj-lan-autologin && go build -o iitj-login . && ./iitj-login install
 
 set -e
 
