@@ -67,7 +67,13 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
   echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
   echo ""
   echo "Then run: iitj-login install"
-  echo "Or run directly: $INSTALL_DIR/$BINARY install"
 else
-  "$INSTALL_DIR/$BINARY" install
+  # Only launch the interactive installer when stdin is a real terminal.
+  # When piped through curl (stdin = pipe), skip it — credentials can't be entered.
+  if [ -t 0 ]; then
+    "$INSTALL_DIR/$BINARY" install
+  else
+    echo "Binary installed. Now run:"
+    echo "  iitj-login install"
+  fi
 fi

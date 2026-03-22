@@ -56,5 +56,12 @@ if ($UserPath -notlike "*$InstDir*") {
 }
 
 Write-Host ""
-Write-Host "Running installer..."
-& "$InstDir\$Binary" install
+# Only launch the interactive installer when running in an interactive session.
+# When piped via "irm ... | iex", stdin is not a terminal and credentials can't be entered.
+if ([System.Environment]::UserInteractive -and [System.Console]::IsInputRedirected -eq $false) {
+    Write-Host "Running installer..."
+    & "$InstDir\$Binary" install
+} else {
+    Write-Host "Binary installed. Now run:"
+    Write-Host "  iitj-login install"
+}
