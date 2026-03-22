@@ -196,9 +196,20 @@ get_credentials() {
     PASSWORD=\$(echo "\$CREDS" | cut -d: -f2-)
 }
 
+# after flushing dns cache, dig queries fortigate's intercepted dns on ethernet
+# and gets the internal captive portal ip (172.17.0.3) instead of public ips.
+# curl uses systemd-resolved which may cache stale public ips from wifi dns;
+# we bypass this by resolving once with dig and passing the ip via --resolve.
+get_portal_ip() {
+    local ip
+    ip=\$(dig +short gateway.iitj.ac.in 2>/dev/null | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
+    [ -z "\$ip" ] && ip=\$(ip route show dev "\$INTERFACE" | awk '/^default/ {print \$3}' | head -1)
+    echo "\$ip"
+}
+
 login_loop() {
     while true; do
-        # flush dns cache so fortigate's dns interception returns its internal ip, not stale public ones
+        # flush dns cache so fortigate's intercepted dns answer is fresh (not stale wifi-dns public ips)
         resolvectl flush-caches 2>/dev/null || true
 
         RESP=\$(curl -s --interface "\$INTERFACE" \\
@@ -208,8 +219,18 @@ login_loop() {
         TOKEN=\$(echo "\$RESP" | grep -o 'fgtauth?[^"]*' | sed 's/fgtauth?//')
 
         if [ -n "\$TOKEN" ]; then
+            echo "[\$(date)] Captive portal detected. Attempting login..."
+
+            # dig runs immediately after flush so fortigate intercepts the query and returns 172.17.0.3
+            PORTAL_IP=\$(get_portal_ip)
+            echo "[\$(date)] Resolved portal IP: \$PORTAL_IP"
+
+            # --resolve bypasses curl's systemd-resolved cache which may still hold stale public ips
+            CURL_RESOLVE="gateway.iitj.ac.in:1003:\${PORTAL_IP}"
+
             # fetch fgtauth page to extract the actual magic value (learned from iitj-autoproxy)
             FGTAUTH_PAGE=\$(curl -ks --interface "\$INTERFACE" \\
+                --resolve "\$CURL_RESOLVE" \\
                 --connect-timeout 10 --max-time 15 \\
                 "https://gateway.iitj.ac.in:1003/fgtauth?\$TOKEN" 2>/dev/null || true)
 
@@ -219,22 +240,30 @@ login_loop() {
             # referer and 4Tredir must point to login?TOKEN — fortigate validates the referer
             REFERER="https://gateway.iitj.ac.in:1003/login?\$TOKEN"
 
-            curl --interface "\$INTERFACE" -ks \\
+            # post credentials; check response for keepalive? which confirms successful authentication
+            POST_RESP=\$(curl --interface "\$INTERFACE" -ks \\
+                --resolve "\$CURL_RESOLVE" \\
                 --connect-timeout 10 --max-time 15 \\
                 -X POST "\$POST_URL" \\
+                -H "Content-Type: application/x-www-form-urlencoded" \\
                 -H "Referer: \$REFERER" \\
                 --data-urlencode "username=\$USERNAME" \\
                 --data-urlencode "password=\$PASSWORD" \\
                 --data-urlencode "magic=\$MAGIC" \\
                 --data-urlencode "4Tredir=\$REFERER" \\
-                -o /dev/null 2>/dev/null || true
+                2>/dev/null || true)
 
-            echo "[\$(date)] Logged in / refreshed."
+            if echo "\$POST_RESP" | grep -q "keepalive?"; then
+                echo "[\$(date)] Login successful."
+            else
+                echo "[\$(date)] Login POST sent — no keepalive in response (may have failed)."
+                echo "[\$(date)] Response: \${POST_RESP:0:300}"
+            fi
         else
             echo "[\$(date)] Already authenticated."
         fi
 
-        sleep 7200
+        sleep 300
     done
 }
 
