@@ -198,6 +198,9 @@ get_credentials() {
 
 login_loop() {
     while true; do
+        # flush dns cache so fortigate's dns interception returns its internal ip, not stale public ones
+        resolvectl flush-caches 2>/dev/null || true
+
         RESP=\$(curl -s --interface "\$INTERFACE" \\
             --connect-timeout 10 --max-time 15 \\
             http://neverssl.com 2>/dev/null || true)
@@ -205,14 +208,25 @@ login_loop() {
         TOKEN=\$(echo "\$RESP" | grep -o 'fgtauth?[^"]*' | sed 's/fgtauth?//')
 
         if [ -n "\$TOKEN" ]; then
-            # --data-urlencode handles special chars in passwords safely
+            # fetch fgtauth page to extract the actual magic value (learned from iitj-autoproxy)
+            FGTAUTH_PAGE=\$(curl -ks --interface "\$INTERFACE" \\
+                --connect-timeout 10 --max-time 15 \\
+                "https://gateway.iitj.ac.in:1003/fgtauth?\$TOKEN" 2>/dev/null || true)
+
+            MAGIC=\$(echo "\$FGTAUTH_PAGE" | grep -o 'name="magic" value="[^"]*"' | sed 's/name="magic" value="//;s/"//')
+            [ -z "\$MAGIC" ] && MAGIC="\$TOKEN"
+
+            # referer and 4Tredir must point to login?TOKEN — fortigate validates the referer
+            REFERER="https://gateway.iitj.ac.in:1003/login?\$TOKEN"
+
             curl --interface "\$INTERFACE" -ks \\
                 --connect-timeout 10 --max-time 15 \\
                 -X POST "\$POST_URL" \\
+                -H "Referer: \$REFERER" \\
                 --data-urlencode "username=\$USERNAME" \\
                 --data-urlencode "password=\$PASSWORD" \\
-                --data-urlencode "magic=\$TOKEN" \\
-                --data-urlencode "4Tredir=http://neverssl.com" \\
+                --data-urlencode "magic=\$MAGIC" \\
+                --data-urlencode "4Tredir=\$REFERER" \\
                 -o /dev/null 2>/dev/null || true
 
             echo "[\$(date)] Logged in / refreshed."
