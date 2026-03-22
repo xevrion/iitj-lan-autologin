@@ -136,11 +136,13 @@ func appendHostsWindows(hostsPath, content string) error {
 	}
 
 	// Fall back to PowerShell with elevation prompt.
-	script := fmt.Sprintf(
-		`Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile -Command "Add-Content -Path \"%s\" -Value \"`r`n%s\""'`,
-		hostsPath,
-		strings.ReplaceAll(content, "\n", "`r`n"),
+	backtick := "`"
+	entry := strings.ReplaceAll(content, "\n", backtick+"r"+backtick+"n")
+	psCmd := fmt.Sprintf(
+		"Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile -Command \"Add-Content -Path \\\"%s\\\" -Value \\\"%s\\\"\"'",
+		hostsPath, entry,
 	)
+	script := psCmd
 	cmd := exec.Command("powershell", "-NoProfile", "-Command", script)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
