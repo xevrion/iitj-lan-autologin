@@ -6,85 +6,105 @@ Keeps your Ethernet session alive by re-authenticating before the ~2h 46m timeou
 
 No more dropped SSH sessions. No more failed downloads. No more broken builds.
 
+Cross-platform Go binary — Linux, macOS (Intel + Apple Silicon), Windows.
+
 ---
 
 ## Installation
 
+### Linux / macOS
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/xevrion/iitj-lan-autologin/main/bootstrap.sh | bash
-./install.sh
 ```
 
-Enter your IITJ LDAP credentials once. The installer handles everything else.
+Or build from source (requires Go 1.21+):
+
+```bash
+git clone https://github.com/xevrion/iitj-lan-autologin
+cd iitj-lan-autologin
+go build -o iitj-login .
+./iitj-login install
+```
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/xevrion/iitj-lan-autologin/main/bootstrap.ps1 | iex
+```
+
+Or build from source:
+
+```powershell
+git clone https://github.com/xevrion/iitj-lan-autologin
+cd iitj-lan-autologin
+go build -o iitj-login.exe .
+.\iitj-login.exe install
+```
+
+The installer prompts for your IITJ LDAP credentials once — everything else is automatic.
+
+---
+
+## Commands
+
+```
+iitj-login install    # setup wizard (run once)
+iitj-login status     # show daemon status
+iitj-login start      # start the daemon
+iitj-login stop       # stop the daemon
+iitj-login uninstall  # remove daemon and stored credentials
+```
 
 ---
 
 ## What the installer does
 
-- Auto-detects your ethernet interface
-- Disables MAC randomization (critical on Fedora — FortiGate authenticates by MAC)
-- Detects and warns about Docker subnet conflicts
-- Pins captive portal routing to ethernet (prevents WiFi from stealing packets)
-- Adds `gateway.iitj.ac.in` to `/etc/hosts` so the browser portal loads correctly
-- Encrypts credentials with AES-256
-- Installs and starts a systemd user service
-- Enables linger so it runs without an active login session
-
----
-
-## Managing the service
-
-Re-run the installer for a menu:
-
-```bash
-./install.sh
-```
-
-Options: Start / Stop / Status / Uninstall
-
-Or use systemctl directly:
-
-```bash
-systemctl --user status iitj-login
-systemctl --user stop iitj-login
-systemctl --user start iitj-login
-```
+1. **Detects your ethernet interface** automatically
+2. **Disables MAC randomization** — FortiGate authenticates by MAC; randomization breaks sessions (Linux/Fedora via nmcli)
+3. **Detects Docker subnet conflicts** — Docker's `172.17.0.0/16` bridge shadows the FortiGate portal IP
+4. **Adds `/etc/hosts` entry** — `172.17.0.3 gateway.iitj.ac.in` bypasses DNS races so the browser captive portal loads correctly
+5. **Pins routing** — adds a static route for `172.17.0.3` via the ethernet gateway so portal traffic can't leak via WiFi
+6. **Encrypts credentials** with AES-256-GCM, stored in your user data dir
+7. **Installs daemon**:
+   - Linux (systemd): `~/.config/systemd/user/iitj-login.service`
+   - macOS (launchd): `~/Library/LaunchAgents/ac.iitj.login.plist`
+   - Windows: Task Scheduler task at logon
 
 ---
 
 ## How it works
 
-FortiGate intercepts any plain HTTP request from unauthenticated devices and returns a redirect containing a one-time `fgtauth` token. That token is the `magic` field the login POST requires.
+FortiGate intercepts any plain HTTP request from unauthenticated devices and returns a JS redirect containing a one-time `fgtauth` token.
 
-The login loop:
+The login loop (every 5 minutes):
 
-1. Curl `http://neverssl.com` via the ethernet interface
-2. If FortiGate intercepts it, extract the `fgtauth` token
-3. POST credentials + token to `https://gateway.iitj.ac.in:1003/`
-4. Sleep 7200 seconds, repeat
+1. Flush DNS cache (`resolvectl flush-caches` / `dscacheutil` / `ipconfig /flushdns`)
+2. `GET http://neverssl.com` — if FortiGate intercepts it, extract the `fgtauth?TOKEN`
+3. Fetch `https://gateway.iitj.ac.in:1003/fgtauth?TOKEN` to extract the actual `magic` value
+4. `POST` credentials + magic to `https://gateway.iitj.ac.in:1003/`
+5. Verify `keepalive?` in the response — confirms successful authentication
+6. Sleep 300s, repeat
 
-FortiGate stores one session per MAC address. Re-login resets the expiry timer — not a new session.
-
-If neverssl returns the real page (no intercept), the device is already authenticated — skip and sleep.
+All HTTP requests are bound to the ethernet interface IP and use the resolved portal IP directly to bypass the glibc DNS race condition.
 
 ---
 
 ## Known issues and fixes
 
-### Fedora: MAC randomization
+### MAC randomization (Fedora default)
 
-Fedora randomizes ethernet MACs by default. FortiGate authenticates by MAC, so every reconnect looks like a new unknown device.
+Fedora randomizes ethernet MACs. FortiGate authenticates by MAC, so every reconnect looks like a new unknown device. Fixed automatically via:
 
-The installer fixes this automatically via:
 ```bash
 nmcli connection modify "<connection>" ethernet.cloned-mac-address permanent
 ```
 
-### Docker: subnet conflict
+### Docker subnet conflict
 
-Docker's default bridge (`172.17.0.0/16`) can overlap with the IP that FortiGate returns for `gateway.iitj.ac.in` via DNS interception. Traffic destined for the captive portal gets routed into Docker locally instead of reaching FortiGate.
+Docker's default bridge (`172.17.0.0/16`) overlaps with FortiGate's portal IP (`172.17.0.3`). The kernel routes portal traffic into Docker locally instead of reaching FortiGate.
 
-The installer detects this and prints the fix. To apply manually:
+The installer detects and warns about this. Manual fix:
 
 ```bash
 sudo mkdir -p /etc/docker
@@ -94,63 +114,69 @@ sudo systemctl restart docker
 docker network prune -f
 ```
 
-### WiFi + Ethernet: routing conflict
+### WiFi + Ethernet routing conflict
 
-When both WiFi and Ethernet are active, the captive portal IP can route via WiFi instead of Ethernet. The installer pins the portal IP to the ethernet gateway via a static nmcli route.
+When both interfaces are active, the portal IP can route via WiFi. Fixed by pinning `172.17.0.3/32` to the ethernet gateway as a static route.
 
-### glibc DNS vs kernel DNS: browser portal not loading
+### Browser captive portal not loading (glibc DNS race)
 
-`dig` and kernel routing see FortiGate's intercepted DNS (`172.17.0.3`) because those DNS packets go via the ethernet interface. But browsers and GNOME use **glibc** (`getent`) for resolution, which may race WiFi's DNS server and cache the real public IPs for `gateway.iitj.ac.in` instead. Port 1003 doesn't exist on those public IPs — so the captive portal page never loads in the browser, and the GNOME portal popup just spins forever.
+Browsers use `getaddrinfo()` (glibc), which may race WiFi's DNS and return public IPs for `gateway.iitj.ac.in`. Port 1003 doesn't exist on those IPs.
 
-Fix: pin the hostname in `/etc/hosts`, bypassing DNS entirely for all processes:
-
-```bash
-echo "172.17.0.3 gateway.iitj.ac.in" | sudo tee -a /etc/hosts
-```
-
-The installer does this automatically.
-
-### The login script's DNS race condition
-
-The same glibc vs kernel DNS split affects `curl` inside the login script. `curl` calls `getaddrinfo()` (glibc) to resolve hostnames, so it can get public IPs even when `dig` returns `172.17.0.3`. The script now:
-
-1. Calls `resolvectl flush-caches` to clear stale entries
-2. Uses `dig +short gateway.iitj.ac.in` immediately after (whose UDP packet FortiGate intercepts on ethernet, returning `172.17.0.3`)
-3. Passes that IP to `curl` via `--resolve gateway.iitj.ac.in:1003:<IP>`, bypassing `getaddrinfo` entirely
+Fixed by the `/etc/hosts` entry added during install, which bypasses DNS for all processes.
 
 ---
 
 ## File locations
 
-```
-~/.local/share/iitj-login/   credentials.enc, key.bin, login.sh
-~/.config/systemd/user/      iitj-login.service
-```
+| Platform | Data dir |
+|----------|----------|
+| Linux    | `~/.local/share/iitj-login/` |
+| macOS    | `~/Library/Application Support/iitj-login/` |
+| Windows  | `%APPDATA%\iitj-login\` |
+
+Files: `credentials.enc`, `key.bin`, `config.json`
 
 ---
 
 ## Security
 
-- Credentials encrypted with AES-256-CBC + PBKDF2
-- Key stored locally with `600` permissions
+- Credentials encrypted with AES-256-GCM
+- Key stored locally with `600` permissions, never leaves the machine
 - No plaintext credentials anywhere
 - No telemetry, no external servers
 - Fully open-source — review before running
 
 ---
 
+## Platform support
+
+| Platform | Service | Tested |
+|----------|---------|--------|
+| Linux (systemd) | systemd user service | ✓ Fedora 39+, Ubuntu 22.04+ |
+| Linux (non-systemd) | — (cron fallback planned) | — |
+| macOS (Intel/M-series) | launchd agent | — |
+| Windows 10/11 | Task Scheduler | — |
+
+Architectures: amd64, arm64 (Apple Silicon, Raspberry Pi)
+
+---
+
 ## Requirements
 
-- `curl`, `openssl`, `systemctl`, `dig` (all standard on modern Linux)
-- `nmcli` (optional — needed for MAC fix and routing fix, available on NetworkManager distros)
+**Runtime**: none — single statically-linked binary
 
-Tested on: Ubuntu 22.04+, Fedora 39+
+**Install-time** (optional, for fixes):
+- Linux: `nmcli` for MAC/routing fixes, `sudo` for `/etc/hosts`
+- macOS: `sudo` for `/etc/hosts`
+- Windows: Administrator for hosts file and routing
 
 ---
 
 ## Version
 
-v3.1.0
+v4.0.0 (Go cross-platform rewrite)
+
+Legacy bash installer: `install.sh` (Linux/systemd only, kept for reference)
 
 ---
 
