@@ -3,7 +3,7 @@
 set -e
 
 APP_NAME="iitj-login"
-VERSION="1.0.0"
+VERSION="2.0.0"
 
 BASE_DIR="$HOME/.local/share/$APP_NAME"
 SERVICE_DIR="$HOME/.config/systemd/user"
@@ -12,24 +12,25 @@ LOGIN_SCRIPT="$BASE_DIR/login.sh"
 CRED_FILE="$BASE_DIR/credentials.enc"
 KEY_FILE="$BASE_DIR/key.bin"
 
-LOGIN_URL="https://gateway.iitj.ac.in:1003/login"
 POST_URL="https://gateway.iitj.ac.in:1003/"
 LOGOUT_URL="https://gateway.iitj.ac.in:1003/logout"
 
+INTERFACE="enp7s0"   # change if needed
+
 print_banner() {
 cat << "EOF"
- ========================================== 
- ______  ______  ________  _____ 
+ ==========================================
+ ______  ______  ________  _____
 /      |/      |/        |/     |
 $$$$$$/ $$$$$$/ $$$$$$$$/ $$$$$ |
   $$ |    $$ |     $$ |      $$ |
   $$ |    $$ |     $$ | __   $$ |
   $$ |    $$ |     $$ |/  |  $$ |
  _$$ |_  _$$ |_    $$ |$$ \__$$ |
-/ $$   |/ $$   |   $$ |$$    $$/ 
-$$$$$$/ $$$$$$/    $$/  $$$$$$/  
-
+/ $$   |/ $$   |   $$ |$$    $$/
+$$$$$$/ $$$$$$/    $$/  $$$$$$/
 EOF
+
 cat <<EOF
 ==========================================
  IITJ Ethernet Auto Login Installer v$VERSION
@@ -38,13 +39,17 @@ EOF
 }
 
 check_dependencies() {
-    for cmd in curl openssl sed systemctl; do
+    for cmd in curl openssl sed systemctl python3 nmcli; do
         if ! command -v $cmd >/dev/null 2>&1; then
             echo "Missing dependency: $cmd"
-            echo "Please install it and re-run."
             exit 1
         fi
     done
+}
+
+fix_mac_randomization() {
+    echo "Fixing MAC randomization (important for Fedora)..."
+    nmcli connection modify "Wired connection 1" ethernet.cloned-mac-address permanent || true
 }
 
 encrypt_credentials() {
@@ -67,49 +72,57 @@ encrypt_credentials() {
 }
 
 create_login_script() {
-cat > "$LOGIN_SCRIPT" << 'EOF'
+cat > "$LOGIN_SCRIPT" << EOF
 #!/usr/bin/env bash
 
 set -e
 
-LOGIN_URL="https://gateway.iitj.ac.in:1003/login"
-POST_URL="https://gateway.iitj.ac.in:1003/"
-LOGOUT_URL="https://gateway.iitj.ac.in:1003/logout"
+POST_URL="$POST_URL"
+LOGOUT_URL="$LOGOUT_URL"
 
-BASE_DIR="$HOME/.local/share/iitj-login"
-CRED_FILE="$BASE_DIR/credentials.enc"
-KEY_FILE="$BASE_DIR/key.bin"
+BASE_DIR="\$HOME/.local/share/iitj-login"
+CRED_FILE="\$BASE_DIR/credentials.enc"
+KEY_FILE="\$BASE_DIR/key.bin"
+
+INTERFACE="$INTERFACE"
 
 logout() {
-    curl -ks "${LOGOUT_URL}?$(date +%s)" >/dev/null || true
+    curl --interface \$INTERFACE -ks --max-time 5 "\${LOGOUT_URL}?\$(date +%s)" >/dev/null || true
     exit 0
 }
 
 trap logout SIGINT SIGTERM
 
 get_credentials() {
-    CREDS=$(openssl enc -aes-256-cbc -d -pbkdf2 \
-        -in "$CRED_FILE" \
-        -pass file:"$KEY_FILE")
+    CREDS=\$(openssl enc -aes-256-cbc -d -pbkdf2 \
+        -in "\$CRED_FILE" \
+        -pass file:"\$KEY_FILE")
 
-    USERNAME=$(echo "$CREDS" | cut -d: -f1)
-    PASSWORD=$(echo "$CREDS" | cut -d: -f2-)
+    USERNAME=\$(echo "\$CREDS" | cut -d: -f1)
+    PASSWORD=\$(echo "\$CREDS" | cut -d: -f2-)
 }
 
 login_loop() {
     while true; do
-        PAGE=$(curl -ks "${LOGIN_URL}?$(date +%s)")
-        MAGIC=$(echo "$PAGE" | sed -n 's/.*name="magic" value="\([^"]*\)".*/\1/p')
+        RESP=\$(curl -s --interface \$INTERFACE \
+            --connect-timeout 10 --max-time 15 \
+            http://neverssl.com 2>/dev/null || true)
 
-        if [ -n "$MAGIC" ]; then
-            curl -ks -X POST "$POST_URL" \
+        TOKEN=\$(echo "\$RESP" | grep -o 'fgtauth?[^"]*' | sed 's/fgtauth?//')
+
+        if [ -n "\$TOKEN" ]; then
+            PASS_ENC=\$(python3 -c "import urllib.parse; print(urllib.parse.quote('''\$PASSWORD'''))")
+
+            curl --interface \$INTERFACE -k \
+                --connect-timeout 10 --max-time 15 \
+                -X POST "\$POST_URL" \
                 -H "Content-Type: application/x-www-form-urlencoded" \
-                --data "username=$USERNAME&password=$PASSWORD&magic=$MAGIC&4Tredir=${LOGIN_URL}" \
+                --data "username=\$USERNAME&password=\$PASS_ENC&magic=\$TOKEN&4Tredir=http://neverssl.com" \
                 >/dev/null
 
-            echo "[`date`] Session refreshed."
+            echo "[\$(date)] Logged in / refreshed."
         else
-            echo "[`date`] Failed to retrieve magic token."
+            echo "[\$(date)] Already authenticated."
         fi
 
         sleep 7200
@@ -126,7 +139,7 @@ chmod +x "$LOGIN_SCRIPT"
 create_service() {
     mkdir -p "$SERVICE_DIR"
 
-cat > "$SERVICE_FILE" <<EOF
+cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=IITJ LAN Auto Login
 After=network-online.target
@@ -147,6 +160,7 @@ EOF
 
 install_app() {
     check_dependencies
+    fix_mac_randomization
     encrypt_credentials
     create_login_script
     create_service
