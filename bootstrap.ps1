@@ -92,8 +92,9 @@ if (-not $Tag) {
 $UserPath = [System.Environment]::GetEnvironmentVariable("PATH", "User")
 if ($UserPath -notlike "*$InstDir*") {
     [System.Environment]::SetEnvironmentVariable("PATH", "$UserPath;$InstDir", "User")
+    $env:PATH = "$env:PATH;$InstDir"
     Write-Host "Added $InstDir to user PATH."
-    Write-Host "Restart your shell for PATH changes to take effect.`n"
+    Write-Host "Updated PATH for this PowerShell session too.`n"
 }
 
 Write-Host ""
@@ -105,4 +106,6 @@ if ([System.Environment]::UserInteractive -and [System.Console]::IsInputRedirect
 } else {
     Write-Host "Binary installed. Now run:"
     Write-Host "  iitj-login install"
+    Write-Host "If PATH has not refreshed yet, run:"
+    Write-Host "  & '$InstDir\$Binary' install"
 }

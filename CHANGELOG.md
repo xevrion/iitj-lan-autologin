@@ -2,6 +2,11 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.0.5 - 2026-03-23
+
+- Fixed the Windows bootstrap so the current PowerShell session can use `iitj-login` immediately after installation.
+- Added a direct executable-path fallback message for shells that still do not refresh command lookup state.
+
 ## v4.0.4 - 2026-03-23
 
 - Fixed the Windows PowerShell bootstrap on environments where `RuntimeInformation.OSArchitecture` is unavailable.
