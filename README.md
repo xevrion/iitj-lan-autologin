@@ -25,6 +25,7 @@ This tool runs in the background and re-authenticates automatically so the conne
 - single self-contained binary
 - Linux, macOS, and Windows support
 - background service installation
+- Linux and macOS man page installation during setup
 - encrypted local credential storage with AES-256-GCM
 - automatic Ethernet interface detection
 - FortiGate login flow with DNS and routing workarounds
@@ -97,6 +98,12 @@ iitj-login start
 iitj-login stop
 iitj-login status
 iitj-login version
+```
+
+On Linux and macOS, setup also installs a man page:
+
+```bash
+man iitj-login
 ```
 
 ## What the installer does

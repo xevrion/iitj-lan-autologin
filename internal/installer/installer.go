@@ -11,6 +11,7 @@ import (
 	"github.com/iitj/iitj-lan-autologin/internal/creds"
 	"github.com/iitj/iitj-lan-autologin/internal/detect"
 	"github.com/iitj/iitj-lan-autologin/internal/fix"
+	"github.com/iitj/iitj-lan-autologin/internal/manual"
 	"github.com/iitj/iitj-lan-autologin/internal/service"
 )
 
@@ -100,10 +101,20 @@ func Run() error {
 		return fmt.Errorf("install service: %w", err)
 	}
 
+	manPagePath := ""
+	if path, err := manual.Install(); err != nil {
+		fmt.Printf("  [man] warning: %v\n", err)
+	} else {
+		manPagePath = path
+	}
+
 	dataDir, _ := creds.DataDir()
 	fmt.Printf("\nInstallation complete.\n")
 	fmt.Printf("  Data dir : %s\n", dataDir)
 	fmt.Printf("  Binary   : %s\n", execPath)
+	if manPagePath != "" {
+		fmt.Printf("  Man page : %s\n", manPagePath)
+	}
 	fmt.Printf("\nCommands: iitj-login status | start | stop | uninstall\n")
 
 	return nil

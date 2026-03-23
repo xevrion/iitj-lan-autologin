@@ -109,6 +109,7 @@ The tag-triggered workflow builds and attaches:
 - `iitj-login-darwin-arm64`
 - `iitj-login-windows-amd64.exe`
 - `iitj-login-windows-arm64.exe`
+- `iitj-login.1`
 - `SHA256SUMS`
 
 ## Post-release checks

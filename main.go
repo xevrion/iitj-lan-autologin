@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/iitj/iitj-lan-autologin/internal/creds"
 	"github.com/iitj/iitj-lan-autologin/internal/installer"
 	"github.com/iitj/iitj-lan-autologin/internal/login"
+	"github.com/iitj/iitj-lan-autologin/internal/manual"
 	"github.com/iitj/iitj-lan-autologin/internal/service"
 )
 
-const version = "4.0.0"
+const version = "4.0.1"
 
 const usage = `iitj-login — IITJ Ethernet Auto Login
 
@@ -44,6 +46,12 @@ func main() {
 		if err := svc.Uninstall(); err != nil {
 			fmt.Fprintf(os.Stderr, "uninstall failed: %v\n", err)
 			os.Exit(1)
+		}
+		if err := creds.RemoveAll(); err != nil {
+			fmt.Fprintf(os.Stderr, "uninstall warning: remove data: %v\n", err)
+		}
+		if err := manual.Remove(); err != nil {
+			fmt.Fprintf(os.Stderr, "uninstall warning: remove man page: %v\n", err)
 		}
 		fmt.Println("Uninstalled.")
 

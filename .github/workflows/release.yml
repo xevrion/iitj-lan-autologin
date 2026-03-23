@@ -52,6 +52,7 @@ jobs:
       - name: Generate checksums
         run: |
           set -euo pipefail
+          cp internal/manual/iitj-login.1 dist/iitj-login.1
           cd dist
           sha256sum * > SHA256SUMS
 
@@ -65,5 +66,6 @@ jobs:
             dist/iitj-login-darwin-arm64
             dist/iitj-login-windows-amd64.exe
             dist/iitj-login-windows-arm64.exe
+            dist/iitj-login.1
             dist/SHA256SUMS
           generate_release_notes: true

@@ -2,6 +2,13 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.0.1 - 2026-03-23
+
+- Added a real `man 1` page and install it during setup on supported systems.
+- Ship the man page as a release artifact.
+- Remove the installed man page during `uninstall`.
+- Fix `uninstall` to also remove stored application data as previously documented.
+
 ## v4.0.0 - 2026-03-23
 
 - Rewrote the tool in Go as a cross-platform single binary.

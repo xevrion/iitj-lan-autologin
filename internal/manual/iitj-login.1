@@ -1,0 +1,80 @@
+.TH IITJ-LOGIN 1 "March 2026" "iitj-login 4.0.0" "User Commands"
+.SH NAME
+iitj-login \- keep IIT Jodhpur hostel Ethernet logged into the FortiGate captive portal
+.SH SYNOPSIS
+.B iitj-login
+.I command
+.SH DESCRIPTION
+.B iitj-login
+is a background login helper for the IIT Jodhpur hostel LAN.
+It keeps an Ethernet session authenticated by detecting captive portal interception
+and re-submitting IITJ LDAP credentials before the session expires.
+.PP
+The installer also applies the practical fixes needed for this network on real
+machines, including MAC randomization handling, Docker subnet conflict detection,
+gateway hostname pinning, and portal route correction.
+.SH COMMANDS
+.TP
+.B install
+Run the setup wizard.
+This detects the active Ethernet interface, applies network fixes, stores
+credentials, installs the background service, and installs this man page on
+supported systems.
+.TP
+.B uninstall
+Remove the background service, stored application data, and installed man page.
+.TP
+.B login
+Run the login loop in the foreground.
+This command is mainly intended for the installed service.
+.TP
+.B start
+Start the background service.
+.TP
+.B stop
+Stop the background service.
+.TP
+.B status
+Show service status output.
+.TP
+.B version
+Print the current binary version.
+.SH INSTALL FLOW
+The normal install path is:
+.IP "1." 4
+Install the binary with the bootstrap script or build it from source.
+.IP "2." 4
+Run
+.B iitj-login install
+once.
+.IP "3." 4
+Use
+.B iitj-login status
+to verify that the service is running.
+.SH FILES
+.TP
+.I ~/.local/share/iitj-login/
+Default Linux data directory.
+Contains encrypted credentials and runtime configuration.
+.TP
+.I ~/.config/systemd/user/iitj-login.service
+Linux systemd user unit installed by
+.BR iitj-login\ install .
+.SH SECURITY
+Credentials are stored locally using AES-256-GCM encryption.
+No external service is involved other than the IITJ captive portal itself.
+.SH EXAMPLES
+.TP
+Install and configure:
+.B iitj-login install
+.TP
+Check service state:
+.B iitj-login status
+.TP
+Show version:
+.B iitj-login version
+.SH SEE ALSO
+.BR systemctl (1),
+.BR launchctl (1)
+.SH AUTHOR
+Yash (xevrion)
