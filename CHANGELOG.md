@@ -2,6 +2,11 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.0.11 - 2026-03-23
+
+- Fixed Windows binary updates so the bootstrap stops the existing scheduled task before replacing `iitj-login.exe`.
+- Changed Windows bootstrap installs to download into a temporary file and move it into place only after the old binary is no longer running.
+
 ## v4.0.10 - 2026-03-23
 
 - Fixed a PowerShell parser error in the Windows bootstrap by replacing fragile `$Arch:` string interpolation with explicit formatting.

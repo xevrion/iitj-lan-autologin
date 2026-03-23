@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 $Repo    = "https://github.com/xevrion/iitj-lan-autologin"
 $Binary  = "iitj-login.exe"
 $InstDir = "$env:LOCALAPPDATA\Programs\iitj-login"
+$TargetPath = Join-Path $InstDir $Binary
 $ApiUrl  = "https://api.github.com/repos/xevrion/iitj-lan-autologin/releases/latest"
 
 Write-Host "IITJ LAN Auto Login — Windows Installer"
@@ -76,6 +77,76 @@ function Download-ReleaseBinary {
     }
 }
 
+function Get-TaskInfo {
+    $task = @{
+        Exists = $false
+        Running = $false
+    }
+
+    try {
+        $out = schtasks /query /tn "IITJ-LAN-AutoLogin" /fo list /v 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $task.Exists = $true
+            foreach ($line in $out) {
+                if ($line -match '^\s*Status:\s*(.+)$') {
+                    $task.Running = $matches[1].ToLower().Contains("running")
+                    break
+                }
+            }
+        }
+    } catch {
+    }
+
+    return $task
+}
+
+function Stop-InstalledTask {
+    param(
+        [Parameter(Mandatory = $true)][string]$BinaryPath
+    )
+
+    $task = Get-TaskInfo
+    if ($task.Exists) {
+        try {
+            schtasks /end /tn "IITJ-LAN-AutoLogin" *> $null
+        } catch {
+        }
+    }
+
+    if (Test-Path $BinaryPath) {
+        Get-Process -Name "iitj-login" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 500
+    }
+
+    return $task
+}
+
+function Install-BinaryFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourcePath,
+        [Parameter(Mandatory = $true)][string]$DestinationPath
+    )
+
+    if (Test-Path $DestinationPath) {
+        Remove-Item $DestinationPath -Force -ErrorAction Stop
+    }
+
+    Move-Item -Path $SourcePath -Destination $DestinationPath -Force
+}
+
+function Start-InstalledTaskIfNeeded {
+    param(
+        [Parameter(Mandatory = $true)]$PreviousTask
+    )
+
+    if ($PreviousTask.Exists) {
+        try {
+            schtasks /run /tn "IITJ-LAN-AutoLogin" *> $null
+        } catch {
+        }
+    }
+}
+
 $Tag = $null
 $AssetUrl = $null
 try {
@@ -97,11 +168,15 @@ try {
 
 if ($Tag -and $AssetUrl) {
     Write-Host "Downloading release binary $Tag..."
+    $taskBeforeInstall = Stop-InstalledTask -BinaryPath $TargetPath
+    $downloadPath = Join-Path $InstDir ($Binary + ".download")
     try {
-        Download-ReleaseBinary -Uri $AssetUrl -OutFile "$InstDir\$Binary"
-        Write-Host "Installed to $InstDir\$Binary"
+        Download-ReleaseBinary -Uri $AssetUrl -OutFile $downloadPath
+        Install-BinaryFile -SourcePath $downloadPath -DestinationPath $TargetPath
+        Start-InstalledTaskIfNeeded -PreviousTask $taskBeforeInstall
+        Write-Host "Installed to $TargetPath"
     } catch {
-        Remove-Item "$InstDir\$Binary" -Force -ErrorAction SilentlyContinue
+        Remove-Item $downloadPath -Force -ErrorAction SilentlyContinue
         $DownloadError = $_.Exception.Message
         $Tag = $null
     }
@@ -128,8 +203,10 @@ if (-not $Tag) {
         Push-Location "$Tmp\src"
         go build -o "$Tmp\$Binary" .
         Pop-Location
-        Copy-Item "$Tmp\$Binary" "$InstDir\$Binary" -Force
-        Write-Host "Installed to $InstDir\$Binary"
+        $taskBeforeInstall = Stop-InstalledTask -BinaryPath $TargetPath
+        Install-BinaryFile -SourcePath "$Tmp\$Binary" -DestinationPath $TargetPath
+        Start-InstalledTaskIfNeeded -PreviousTask $taskBeforeInstall
+        Write-Host "Installed to $TargetPath"
     } finally {
         Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue
     }
@@ -149,7 +226,7 @@ Write-Host ""
 # When piped via "irm ... | iex", stdin is not a terminal and credentials can't be entered.
 if ([System.Environment]::UserInteractive -and [System.Console]::IsInputRedirected -eq $false) {
     Write-Host "Running installer..."
-    & "$InstDir\$Binary" install
+    & $TargetPath install
     Write-Host ""
     Write-Host "Installation step complete."
     Write-Host "Use a normal Command Prompt or normal PowerShell window for daily commands such as:"
@@ -160,5 +237,5 @@ if ([System.Environment]::UserInteractive -and [System.Console]::IsInputRedirect
     Write-Host "Binary installed. Now run:"
     Write-Host "  iitj-login install"
     Write-Host "If PATH has not refreshed yet, run:"
-    Write-Host "  & '$InstDir\$Binary' install"
+    Write-Host "  & '$TargetPath' install"
 }
