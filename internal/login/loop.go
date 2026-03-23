@@ -34,6 +34,7 @@ func RunLoop() error {
 	fmt.Printf("[iitj-login] started — interface: %s (%s)\n", ifaceName, ifaceIP)
 
 	for {
+		now := time.Now()
 		FlushDNSCache()
 
 		// Re-check interface IP each loop in case it changed.
@@ -44,10 +45,13 @@ func RunLoop() error {
 		result, err := CheckAndLogin(ifaceName, ifaceIP, c.Username, c.Password)
 		if err != nil {
 			fmt.Printf("[%s] error: %v\n", timestamp(), err)
+			_ = creds.UpdateRuntimeState(false, "error", err.Error(), now)
 		} else if result.NeedsLogin {
 			fmt.Printf("[%s] captive portal detected — %s\n", timestamp(), result.Message)
+			_ = creds.UpdateRuntimeState(result.LoggedIn, "login", result.Message, now)
 		} else {
 			fmt.Printf("[%s] already authenticated\n", timestamp())
+			_ = creds.UpdateRuntimeState(true, "ok", result.Message, now)
 		}
 
 		time.Sleep(checkInterval)

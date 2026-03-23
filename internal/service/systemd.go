@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/iitj/iitj-lan-autologin/internal/creds"
 )
 
 const (
@@ -126,6 +128,7 @@ func (s *SystemdService) StatusInfo() (StatusInfo, error) {
 		Startup:        "not installed",
 		LogHint:        "systemd user journal",
 	}
+	info.Runtime, _ = creds.LoadRuntimeState()
 	if !installed {
 		return info, nil
 	}

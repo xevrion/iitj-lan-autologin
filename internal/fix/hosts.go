@@ -99,6 +99,11 @@ func entryExists(hostsPath string) bool {
 	return false
 }
 
+// HostsEntryPresent reports whether the captive portal hosts entry exists.
+func HostsEntryPresent() bool {
+	return entryExists(hostsFilePath())
+}
+
 func appendHostsUnix(hostsPath, content string) error {
 	// Try direct write first (works if running as root).
 	f, err := os.OpenFile(hostsPath, os.O_APPEND|os.O_WRONLY, 0644)

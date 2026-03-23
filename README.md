@@ -36,6 +36,8 @@ This tool runs in the background and re-authenticates automatically so the conne
 - FortiGate login flow with DNS and routing workarounds
 - installer checks for Docker subnet conflicts
 - installer fixes the captive portal hostname for browsers
+- runtime health metadata for recent login state
+- `logs` and `doctor` commands for troubleshooting
 
 ## Installation
 
@@ -110,6 +112,9 @@ iitj-login login
 iitj-login start
 iitj-login stop
 iitj-login status
+iitj-login logs
+iitj-login logs --lines 50
+iitj-login doctor
 iitj-login version
 ```
 
@@ -119,7 +124,11 @@ On Linux and macOS, setup also installs a man page:
 man iitj-login
 ```
 
-`iitj-login status` prints a readable summary of installation state, service state, configured interface, data location, and recent logs for the current platform.
+`iitj-login status` prints a readable summary of installation state, service state, configured interface, data location, recent logs, and the last recorded login health signals for the current platform.
+
+`iitj-login logs` prints recent service logs directly.
+
+`iitj-login doctor` runs local diagnostics for the most common real-world failures: missing credentials, stopped service, interface problems, hosts entry issues, Docker conflicts, and recent login-loop failures.
 
 ## What the installer does
 

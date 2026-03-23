@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/iitj/iitj-lan-autologin/internal/creds"
 )
 
 const (
@@ -125,6 +127,7 @@ func (l *LaunchdService) StatusInfo() (StatusInfo, error) {
 		Startup:        "not installed",
 		LogHint:        launchdLogFile,
 	}
+	info.Runtime, _ = creds.LoadRuntimeState()
 	if !installed {
 		return info, nil
 	}

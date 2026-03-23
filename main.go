@@ -3,16 +3,18 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/iitj/iitj-lan-autologin/internal/creds"
+	"github.com/iitj/iitj-lan-autologin/internal/doctor"
 	"github.com/iitj/iitj-lan-autologin/internal/installer"
 	"github.com/iitj/iitj-lan-autologin/internal/login"
 	"github.com/iitj/iitj-lan-autologin/internal/manual"
 	"github.com/iitj/iitj-lan-autologin/internal/service"
 )
 
-const version = "4.0.12"
+const version = "4.1.0"
 
 const usage = `iitj-login — IITJ Ethernet Auto Login
 
@@ -26,6 +28,8 @@ Commands:
   start      Start the background daemon
   stop       Stop the background daemon
   status     Show daemon status
+  logs       Show recent service logs
+  doctor     Run local diagnostics
   version    Show version
 `
 
@@ -90,6 +94,41 @@ func main() {
 		out, err := service.StatusReport(version, info, recentLogs)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "status failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Print(out)
+
+	case "logs":
+		svc := service.New()
+		lines := 20
+		if len(os.Args) >= 4 && os.Args[2] == "--lines" {
+			n, err := strconv.Atoi(os.Args[3])
+			if err != nil || n <= 0 {
+				printError("logs failed", "invalid --lines value")
+				os.Exit(1)
+			}
+			lines = n
+		} else if len(os.Args) == 3 {
+			printError("logs failed", "usage: iitj-login logs [--lines N]")
+			os.Exit(1)
+		}
+		recentLogs, err := svc.RecentLogs(lines)
+		if err != nil {
+			printError("logs failed", err)
+			os.Exit(1)
+		}
+		if len(recentLogs) == 0 {
+			fmt.Println("No recent logs available.")
+			return
+		}
+		for _, line := range recentLogs {
+			fmt.Println(line)
+		}
+
+	case "doctor":
+		out, err := doctor.Run()
+		if err != nil {
+			printError("doctor failed", err)
 			os.Exit(1)
 		}
 		fmt.Print(out)

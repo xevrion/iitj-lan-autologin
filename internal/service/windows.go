@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/iitj/iitj-lan-autologin/internal/creds"
 )
 
 const windowsTaskName = "IITJ-LAN-AutoLogin"
@@ -78,6 +80,7 @@ func (w *WindowsTaskService) StatusInfo() (StatusInfo, error) {
 		Startup:        "not installed",
 		LogHint:        "service log file",
 	}
+	info.Runtime, _ = creds.LoadRuntimeState()
 	if !installed {
 		return info, nil
 	}

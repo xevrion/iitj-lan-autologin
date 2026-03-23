@@ -22,6 +22,7 @@ type StatusInfo struct {
 	LastExit       string
 	LogHint        string
 	Note           string
+	Runtime        creds.RuntimeState
 }
 
 // StatusReport formats the user-facing status output.
@@ -73,6 +74,18 @@ func StatusReport(version string, info StatusInfo, recentLogs []string) (string,
 	if info.LogHint != "" {
 		writeField(&b, ui, "Log source", info.LogHint)
 	}
+	if info.Runtime.LastSuccessAt != "" {
+		writeField(&b, ui, "Last success", info.Runtime.LastSuccessAt)
+	}
+	if info.Runtime.LastFailureAt != "" {
+		writeField(&b, ui, "Last failure", info.Runtime.LastFailureAt)
+	}
+	if info.Runtime.ConsecutiveFailures > 0 {
+		writeField(&b, ui, "Failures", fmt.Sprintf("%d", info.Runtime.ConsecutiveFailures))
+	}
+	if info.Runtime.LastError != "" {
+		writeField(&b, ui, "Last error", ui.warn(info.Runtime.LastError))
+	}
 	if info.Note != "" {
 		writeField(&b, ui, "Note", ui.warn(info.Note))
 	}
@@ -91,6 +104,8 @@ func StatusReport(version string, info StatusInfo, recentLogs []string) (string,
 
 	b.WriteString("\n")
 	b.WriteString(ui.section("Commands"))
+	b.WriteString("  iitj-login doctor\n")
+	b.WriteString("  iitj-login logs --lines 20\n")
 	b.WriteString("  iitj-login start\n")
 	b.WriteString("  iitj-login stop\n")
 	b.WriteString("  iitj-login uninstall\n")

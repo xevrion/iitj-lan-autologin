@@ -2,6 +2,13 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.1.0 - 2026-03-23
+
+- Added `iitj-login doctor` for local diagnostics across service health, credentials, interface state, hosts entry checks, Docker conflicts, and recent login-loop failures.
+- Added `iitj-login logs` to show recent service logs directly from the current platform backend.
+- Added runtime health metadata so the login loop records the last successful check, last failure, last error, and consecutive failure count.
+- Updated `status` to surface the new health metadata and command guidance.
+
 ## v4.0.12 - 2026-03-23
 
 - Fixed Windows bootstrap upgrades to wait for `iitj-login.exe` to fully release its file lock before replacement.

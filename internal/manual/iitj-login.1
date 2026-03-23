@@ -1,4 +1,4 @@
-.TH IITJ-LOGIN 1 "March 2026" "iitj-login 4.0.0" "User Commands"
+.TH IITJ-LOGIN 1 "March 2026" "iitj-login 4.1.0" "User Commands"
 .SH NAME
 iitj-login \- keep IIT Jodhpur hostel Ethernet logged into the FortiGate captive portal
 .SH SYNOPSIS
@@ -38,6 +38,13 @@ Stop the background service.
 .B status
 Show service status output.
 .TP
+.B logs
+Show recent service logs.
+.TP
+.B doctor
+Run local diagnostics for service state, credentials, interface health, and
+common IITJ network pitfalls.
+.TP
 .B version
 Print the current binary version.
 .SH INSTALL FLOW
@@ -71,6 +78,12 @@ Install and configure:
 .TP
 Check service state:
 .B iitj-login status
+.TP
+Show recent logs:
+.B iitj-login logs
+.TP
+Run local diagnostics:
+.B iitj-login doctor
 .TP
 Show version:
 .B iitj-login version
