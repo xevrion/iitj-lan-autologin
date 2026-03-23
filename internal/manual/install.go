@@ -15,6 +15,11 @@ var page []byte
 
 const pageName = "iitj-login.1"
 
+// InstalledPath returns the path of the installed man page if present.
+func InstalledPath() (string, error) {
+	return installedPath()
+}
+
 // Install writes the man page to a directory visible to `man` when possible.
 func Install() (string, error) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {

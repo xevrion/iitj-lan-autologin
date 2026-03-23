@@ -2,6 +2,12 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.0.2 - 2026-03-23
+
+- Replaced raw service-manager dumps in `status` with a readable cross-platform summary.
+- Show install state, service state, configured interface details, credential presence, and platform-specific log guidance in one view.
+- Make Linux status degrade cleanly when live systemd state is unavailable outside a normal user session.
+
 ## v4.0.1 - 2026-03-23
 
 - Added a real `man 1` page and install it during setup on supported systems.

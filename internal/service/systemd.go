@@ -113,10 +113,76 @@ func (s *SystemdService) Status() (string, error) {
 	return string(out), nil
 }
 
+func (s *SystemdService) StatusInfo() (StatusInfo, error) {
+	installed, err := s.IsInstalled()
+	if err != nil {
+		return StatusInfo{}, err
+	}
+
+	info := StatusInfo{
+		ServiceManager: "systemd user service",
+		ServiceName:    systemdServiceName,
+		Installed:      installed,
+		Startup:        "not installed",
+		LogHint:        "journalctl --user -u iitj-login -n 50 --no-pager",
+	}
+	if !installed {
+		return info, nil
+	}
+
+	out, err := exec.Command(
+		"systemctl", "--user", "show", systemdServiceName,
+		"--property=ActiveState,SubState,UnitFileState,ExecMainPID,Result",
+		"--no-pager",
+	).Output()
+	if err != nil {
+		info.Startup = "installed"
+		info.Note = "live systemd state is unavailable outside a normal user session"
+		return info, nil
+	}
+
+	props := parseKeyValueOutput(string(out))
+	active := props["ActiveState"]
+	subState := props["SubState"]
+	info.Running = active == "active"
+
+	if unitFileState := props["UnitFileState"]; unitFileState != "" {
+		info.Startup = unitFileState
+	}
+	if subState != "" && subState != active {
+		info.Startup = info.Startup + ", " + subState
+	}
+	if pid := props["ExecMainPID"]; pid != "" && pid != "0" {
+		info.PID = pid
+	}
+	if result := props["Result"]; result != "" && result != "success" {
+		info.LastExit = result
+	}
+
+	return info, nil
+}
+
 func (s *SystemdService) IsInstalled() (bool, error) {
-	out, err := exec.Command("systemctl", "--user", "list-unit-files", "--no-pager").Output()
+	path, err := s.servicePath()
 	if err != nil {
 		return false, err
 	}
-	return strings.Contains(string(out), systemdServiceFile), nil
+	_, err = os.Stat(path)
+	return err == nil, nil
+}
+
+func parseKeyValueOutput(s string) map[string]string {
+	out := make(map[string]string)
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		out[key] = value
+	}
+	return out
 }

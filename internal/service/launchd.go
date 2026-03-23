@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -111,6 +112,41 @@ func (l *LaunchdService) Status() (string, error) {
 	return string(out), nil
 }
 
+func (l *LaunchdService) StatusInfo() (StatusInfo, error) {
+	installed, err := l.IsInstalled()
+	if err != nil {
+		return StatusInfo{}, err
+	}
+
+	info := StatusInfo{
+		ServiceManager: "launchd user agent",
+		ServiceName:    launchdLabel,
+		Installed:      installed,
+		Startup:        "not installed",
+		LogHint:        "tail -n 50 /tmp/iitj-login.log",
+	}
+	if !installed {
+		return info, nil
+	}
+
+	info.Startup = "loaded at login"
+	out, err := exec.Command("launchctl", "list", launchdLabel).CombinedOutput()
+	if err != nil {
+		return info, nil
+	}
+
+	text := string(out)
+	if pid := extractLaunchdValue(text, `"PID" = ([0-9]+);`); pid != "" && pid != "0" {
+		info.Running = true
+		info.PID = pid
+	}
+	if lastExit := extractLaunchdValue(text, `"LastExitStatus" = ([0-9]+);`); lastExit != "" && lastExit != "0" {
+		info.LastExit = lastExit
+	}
+
+	return info, nil
+}
+
 func (l *LaunchdService) IsInstalled() (bool, error) {
 	path, err := l.plistPath()
 	if err != nil {
@@ -118,4 +154,13 @@ func (l *LaunchdService) IsInstalled() (bool, error) {
 	}
 	_, err = os.Stat(path)
 	return err == nil, nil
+}
+
+func extractLaunchdValue(text, pattern string) string {
+	re := regexp.MustCompile(pattern)
+	m := re.FindStringSubmatch(text)
+	if len(m) != 2 {
+		return ""
+	}
+	return m[1]
 }

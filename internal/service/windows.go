@@ -64,6 +64,39 @@ func (w *WindowsTaskService) Status() (string, error) {
 	return string(out), nil
 }
 
+func (w *WindowsTaskService) StatusInfo() (StatusInfo, error) {
+	installed, err := w.IsInstalled()
+	if err != nil {
+		return StatusInfo{}, err
+	}
+
+	info := StatusInfo{
+		ServiceManager: "Windows Task Scheduler",
+		ServiceName:    windowsTaskName,
+		Installed:      installed,
+		Startup:        "not installed",
+		LogHint:        "schtasks /query /tn IITJ-LAN-AutoLogin /fo list /v",
+	}
+	if !installed {
+		return info, nil
+	}
+
+	info.Startup = "at logon"
+	out, err := exec.Command("schtasks", "/query", "/tn", windowsTaskName, "/fo", "list", "/v").CombinedOutput()
+	if err != nil {
+		return info, nil
+	}
+
+	props := parseWindowsList(string(out))
+	status := strings.ToLower(props["Status"])
+	info.Running = strings.Contains(status, "running")
+	if lastResult := props["Last Result"]; lastResult != "" && lastResult != "0" && lastResult != "The operation completed successfully." {
+		info.LastExit = lastResult
+	}
+
+	return info, nil
+}
+
 func (w *WindowsTaskService) IsInstalled() (bool, error) {
 	out, err := exec.Command("schtasks", "/query", "/tn", windowsTaskName).CombinedOutput()
 	if err != nil {
@@ -73,4 +106,20 @@ func (w *WindowsTaskService) IsInstalled() (bool, error) {
 		return false, fmt.Errorf("schtasks query: %w", err)
 	}
 	return true, nil
+}
+
+func parseWindowsList(s string) map[string]string {
+	out := make(map[string]string)
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		out[strings.TrimSpace(key)] = strings.TrimSpace(value)
+	}
+	return out
 }

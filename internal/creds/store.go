@@ -32,6 +32,21 @@ const (
 	configFile   = "config.json"
 )
 
+// HasCredentials reports whether encrypted credentials are present.
+func HasCredentials() bool {
+	dir, err := DataDir()
+	if err != nil {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(dir, keyFile)); err != nil {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(dir, credsFile)); err != nil {
+		return false
+	}
+	return true
+}
+
 // DataDir returns the platform-specific data directory.
 func DataDir() (string, error) {
 	var base string

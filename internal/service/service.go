@@ -14,6 +14,7 @@ type Service interface {
 	Start() error
 	Stop() error
 	Status() (string, error)
+	StatusInfo() (StatusInfo, error)
 	IsInstalled() (bool, error)
 }
 
@@ -48,6 +49,9 @@ func (u *UnsupportedService) Uninstall() error           { return u.err() }
 func (u *UnsupportedService) Start() error               { return u.err() }
 func (u *UnsupportedService) Stop() error                { return u.err() }
 func (u *UnsupportedService) Status() (string, error)    { return "", u.err() }
+func (u *UnsupportedService) StatusInfo() (StatusInfo, error) {
+	return StatusInfo{}, u.err()
+}
 func (u *UnsupportedService) IsInstalled() (bool, error) { return false, u.err() }
 func (u *UnsupportedService) err() error {
 	return fmt.Errorf("service management not supported on %s", u.os)

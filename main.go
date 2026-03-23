@@ -11,7 +11,7 @@ import (
 	"github.com/iitj/iitj-lan-autologin/internal/service"
 )
 
-const version = "4.0.1"
+const version = "4.0.2"
 
 const usage = `iitj-login — IITJ Ethernet Auto Login
 
@@ -79,7 +79,12 @@ func main() {
 
 	case "status":
 		svc := service.New()
-		out, err := svc.Status()
+		info, err := svc.StatusInfo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "status failed: %v\n", err)
+			os.Exit(1)
+		}
+		out, err := service.StatusReport(version, info)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "status failed: %v\n", err)
 			os.Exit(1)

@@ -111,6 +111,8 @@ On Linux and macOS, setup also installs a man page:
 man iitj-login
 ```
 
+`iitj-login status` prints a readable summary of installation state, service state, configured interface, data location, and the right log command for the current platform.
+
 ## What the installer does
 
 The installer is opinionated because the network problems are specific and repeatable.
