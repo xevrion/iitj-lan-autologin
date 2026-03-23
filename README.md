@@ -246,8 +246,6 @@ Release history is tracked in [CHANGELOG.md](CHANGELOG.md).
 
 Release process for maintainers is documented in [RELEASING.md](RELEASING.md).
 
-Legacy script-based installer history is preserved in `install.sh`.
-
 ## License
 
 [MIT](LICENSE)

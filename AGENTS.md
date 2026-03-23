@@ -59,7 +59,6 @@ internal/
   service/
 bootstrap.sh
 bootstrap.ps1
-install.sh
 README.md
 CHANGELOG.md
 RELEASING.md
@@ -77,7 +76,6 @@ Module responsibilities:
 - `internal/creds`: encrypted credential and config storage
 - `internal/manual`: man page installation and removal
 - `bootstrap.sh` and `bootstrap.ps1`: bootstrap installers
-- `install.sh`: legacy bash implementation kept for reference
 
 ## Expectations for all changes
 
@@ -249,7 +247,6 @@ The bootstrap scripts are part of the release contract.
 - Do not replace accurate technical wording with marketing fluff
 - Do not add vague AI-style README filler
 - Do not change release flow casually
-- Do not break legacy references unless intentionally removing them
 - Do not leave docs stale after changing user-facing behavior
 
 ## If you are an LLM making a change
