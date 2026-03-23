@@ -1,28 +1,59 @@
 # IITJ LAN Auto Login
 
-Automatic background login for IIT Jodhpur hostel LAN (FortiGate captive portal).
+`iitj-login` keeps the IIT Jodhpur hostel Ethernet session alive by logging back into the FortiGate captive portal before the session expires.
 
-Keeps your Ethernet session alive by re-authenticating before the ~2h 46m timeout expires.
+It is built for the actual failure modes that make this network annoying to use in practice: expiring sessions, Docker subnet conflicts, MAC randomization, WiFi stealing portal traffic, and DNS returning the wrong address for the gateway.
 
-No more dropped SSH sessions. No more failed downloads. No more broken builds.
+The current release line is a cross-platform Go binary with support for Linux, macOS, and Windows.
 
-Cross-platform Go binary — Linux, macOS (Intel + Apple Silicon), Windows.
+## Why this exists
 
-Versioned binaries are published through GitHub Releases.
+IITJ hostel LAN does not stay authenticated permanently. If you are on Ethernet, the session typically expires after about 10,000 seconds, which is roughly 2 hours and 46 minutes.
 
----
+That leads to predictable breakage:
+
+- SSH sessions drop
+- downloads fail halfway through
+- package managers hang
+- long builds die silently
+- headless machines become painful to use
+
+This tool runs in the background and re-authenticates automatically so the connection stays usable.
+
+## Features
+
+- single self-contained binary
+- Linux, macOS, and Windows support
+- background service installation
+- encrypted local credential storage with AES-256-GCM
+- automatic Ethernet interface detection
+- FortiGate login flow with DNS and routing workarounds
+- installer checks for Docker subnet conflicts
+- installer fixes the captive portal hostname for browsers
 
 ## Installation
 
-### Linux / macOS
+### Linux and macOS
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/xevrion/iitj-lan-autologin/main/bootstrap.sh | bash
 ```
 
-The bootstrap script downloads the latest matching release binary and falls back to a source build only when no release asset exists for your platform.
+The bootstrap script downloads the latest matching release binary. If no release asset exists for your platform, it falls back to building from source when `go` and `git` are available.
 
-Or build from source (requires Go 1.21+):
+### Windows
+
+Run in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/xevrion/iitj-lan-autologin/main/bootstrap.ps1 | iex
+```
+
+The PowerShell bootstrap downloads the latest matching release binary. If no release asset exists for your platform, it falls back to building from source when `go` and `git` are available.
+
+### Build from source
+
+Requires Go 1.21 or newer.
 
 ```bash
 git clone https://github.com/xevrion/iitj-lan-autologin
@@ -31,15 +62,7 @@ go build -o iitj-login .
 ./iitj-login install
 ```
 
-### Windows (PowerShell)
-
-```powershell
-irm https://raw.githubusercontent.com/xevrion/iitj-lan-autologin/main/bootstrap.ps1 | iex
-```
-
-The PowerShell bootstrap downloads the latest matching release binary and falls back to a source build only when no release asset exists for your platform.
-
-Or build from source:
+On Windows:
 
 ```powershell
 git clone https://github.com/xevrion/iitj-lan-autologin
@@ -48,69 +71,114 @@ go build -o iitj-login.exe .
 .\iitj-login.exe install
 ```
 
-The installer prompts for your IITJ LDAP credentials once — everything else is automatic.
+## Usage
 
----
+After installation:
 
-## Commands
-
-```
-iitj-login install    # setup wizard (run once)
-iitj-login status     # show daemon status
-iitj-login start      # start the daemon
-iitj-login stop       # stop the daemon
-iitj-login uninstall  # remove daemon and stored credentials
+```bash
+iitj-login install
 ```
 
----
+That setup flow:
+
+1. detects the active Ethernet interface
+2. applies the network fixes that are needed on the current machine
+3. asks once for IITJ LDAP credentials
+4. stores credentials locally in encrypted form
+5. installs the background service
+
+Available commands:
+
+```text
+iitj-login install
+iitj-login uninstall
+iitj-login login
+iitj-login start
+iitj-login stop
+iitj-login status
+iitj-login version
+```
 
 ## What the installer does
 
-1. **Detects your ethernet interface** automatically
-2. **Disables MAC randomization** — FortiGate authenticates by MAC; randomization breaks sessions (Linux/Fedora via nmcli)
-3. **Detects Docker subnet conflicts** — Docker's `172.17.0.0/16` bridge shadows the FortiGate portal IP
-4. **Adds `/etc/hosts` entry** — `172.17.0.3 gateway.iitj.ac.in` bypasses DNS races so the browser captive portal loads correctly
-5. **Pins routing** — adds a static route for `172.17.0.3` via the ethernet gateway so portal traffic can't leak via WiFi
-6. **Encrypts credentials** with AES-256-GCM, stored in your user data dir
-7. **Installs daemon**:
-   - Linux (systemd): `~/.config/systemd/user/iitj-login.service`
-   - macOS (launchd): `~/Library/LaunchAgents/ac.iitj.login.plist`
-   - Windows: Task Scheduler task at logon
+The installer is opinionated because the network problems are specific and repeatable.
 
----
+### 1. Detects the Ethernet interface
 
-## How it works
+The login requests must leave through Ethernet, not WiFi. The tool detects the active wired interface and binds requests to that path.
 
-FortiGate intercepts any plain HTTP request from unauthenticated devices and returns a JS redirect containing a one-time `fgtauth` token.
+### 2. Disables MAC randomization where needed
 
-The login loop (every 5 minutes):
+FortiGate authentication is tied to the device MAC address. If the operating system keeps changing the MAC, the session becomes unreliable.
 
-1. Flush DNS cache (`resolvectl flush-caches` / `dscacheutil` / `ipconfig /flushdns`)
-2. `GET http://neverssl.com` — if FortiGate intercepts it, extract the `fgtauth?TOKEN`
-3. Fetch `https://gateway.iitj.ac.in:1003/fgtauth?TOKEN` to extract the actual `magic` value
-4. `POST` credentials + magic to `https://gateway.iitj.ac.in:1003/`
-5. Verify `keepalive?` in the response — confirms successful authentication
-6. Sleep 300s, repeat
+On Linux systems using NetworkManager, the installer attempts to switch the connection to a permanent MAC address.
 
-All HTTP requests are bound to the ethernet interface IP and use the resolved portal IP directly to bypass the glibc DNS race condition.
+### 3. Detects Docker subnet conflicts
 
----
+Docker commonly uses `172.17.0.0/16` for `docker0`. The captive portal network also uses `172.17.x.x`, which can cause the kernel to route portal traffic locally into Docker instead of the real gateway.
 
-## Known issues and fixes
+The installer detects this and warns about it.
 
-### MAC randomization (Fedora default)
+### 4. Adds a hosts entry for the gateway
 
-Fedora randomizes ethernet MACs. FortiGate authenticates by MAC, so every reconnect looks like a new unknown device. Fixed automatically via:
+The captive portal hostname is pinned to:
 
-```bash
-nmcli connection modify "<connection>" ethernet.cloned-mac-address permanent
+```text
+172.17.0.3 gateway.iitj.ac.in
 ```
 
-### Docker subnet conflict
+This avoids DNS races where browsers or other tools resolve the public address instead of the internal captive portal address.
 
-Docker's default bridge (`172.17.0.0/16`) overlaps with FortiGate's portal IP (`172.17.0.3`). The kernel routes portal traffic into Docker locally instead of reaching FortiGate.
+### 5. Pins the route to the captive portal
 
-The installer detects and warns about this. Manual fix:
+When WiFi and Ethernet are both active, the route to the portal can go out through the wrong interface. The installer adds a static route so portal traffic stays on Ethernet.
+
+### 6. Stores credentials securely
+
+Credentials are encrypted locally using AES-256-GCM and stored in the user data directory. They are not sent anywhere except the IITJ captive portal.
+
+### 7. Installs a background service
+
+Platform-specific service setup:
+
+- Linux: systemd user service
+- macOS: launchd agent
+- Windows: Task Scheduler task
+
+## How the login flow works
+
+FortiGate intercepts a normal HTTP request from an unauthenticated client and returns a redirect flow that eventually exposes a one-time authentication token.
+
+The login loop works like this:
+
+1. flush DNS cache where possible
+2. request `http://neverssl.com`
+3. detect captive portal interception
+4. fetch the FortiGate auth page
+5. extract the `magic` value needed for login
+6. POST IITJ LDAP credentials to `https://gateway.iitj.ac.in:1003/`
+7. verify the response indicates a live session
+8. sleep and repeat
+
+All login traffic is bound to the Ethernet interface and the tool bypasses unreliable name resolution by using the resolved portal IP directly.
+
+## Known issues
+
+### HTTPS bootstrap can fail before portal login
+
+If FortiGate is intercepting HTTPS before you are authenticated, the bootstrap `curl` command may fail with an SSL error.
+
+Options:
+
+1. log in once in a browser, then run the bootstrap again
+2. use `curl -k` for the bootstrap only
+3. clone the repository and build locally
+
+### Docker can break portal routing
+
+If Docker is using an overlapping `172.17.x.x` bridge network, portal traffic may never reach FortiGate.
+
+One fix is to move Docker onto a different default pool:
 
 ```bash
 sudo mkdir -p /etc/docker
@@ -120,80 +188,63 @@ sudo systemctl restart docker
 docker network prune -f
 ```
 
-### WiFi + Ethernet routing conflict
+### WiFi can steal captive portal traffic
 
-When both interfaces are active, the portal IP can route via WiFi. Fixed by pinning `172.17.0.3/32` to the ethernet gateway as a static route.
-
-### Browser captive portal not loading (glibc DNS race)
-
-Browsers use `getaddrinfo()` (glibc), which may race WiFi's DNS and return public IPs for `gateway.iitj.ac.in`. Port 1003 doesn't exist on those IPs.
-
-Fixed by the `/etc/hosts` entry added during install, which bypasses DNS for all processes.
-
----
+If both WiFi and Ethernet are active, route selection can be wrong. The installer tries to pin the captive portal route to the Ethernet gateway.
 
 ## File locations
 
-| Platform | Data dir |
-|----------|----------|
-| Linux    | `~/.local/share/iitj-login/` |
-| macOS    | `~/Library/Application Support/iitj-login/` |
-| Windows  | `%APPDATA%\iitj-login\` |
+| Platform | Data directory |
+| --- | --- |
+| Linux | `~/.local/share/iitj-login/` |
+| macOS | `~/Library/Application Support/iitj-login/` |
+| Windows | `%APPDATA%\iitj-login\` |
 
-Files: `credentials.enc`, `key.bin`, `config.json`
+Typical files:
 
----
-
-## Security
-
-- Credentials encrypted with AES-256-GCM
-- Key stored locally with `600` permissions, never leaves the machine
-- No plaintext credentials anywhere
-- No telemetry, no external servers
-- Fully open-source — review before running
-
----
+- `credentials.enc`
+- `key.bin`
+- `config.json`
 
 ## Platform support
 
-| Platform | Service | Tested |
-|----------|---------|--------|
-| Linux (systemd) | systemd user service | ✓ Fedora 39+, Ubuntu 22.04+ |
-| Linux (non-systemd) | — (cron fallback planned) | — |
-| macOS (Intel/M-series) | launchd agent | — |
-| Windows 10/11 | Task Scheduler | — |
+| Platform | Service integration | Status |
+| --- | --- | --- |
+| Linux with systemd | systemd user service | supported |
+| macOS | launchd agent | supported |
+| Windows 10 and 11 | Task Scheduler | supported |
 
-Architectures: amd64, arm64 (Apple Silicon, Raspberry Pi)
+Architectures currently released:
 
----
+- `linux/amd64`
+- `linux/arm64`
+- `darwin/amd64`
+- `darwin/arm64`
+- `windows/amd64`
+- `windows/arm64`
 
-## Requirements
+## Security
 
-**Runtime**: none — single statically-linked binary
+- credentials are encrypted locally with AES-256-GCM
+- the encryption key stays on the machine
+- there is no telemetry
+- there are no external services involved
+- everything is open source and reviewable
 
-**Install-time** (optional, for fixes):
-- Linux: `nmcli` for MAC/routing fixes, `sudo` for `/etc/hosts`
-- macOS: `sudo` for `/etc/hosts`
-- Windows: Administrator for hosts file and routing
-
----
+This project still handles real credentials on your machine, so treat it like any other local automation tool with secrets access.
 
 ## Releases
 
-Current binary release line: `v4.0.0`
+Release history is tracked in [CHANGELOG.md](CHANGELOG.md).
 
-Release history: [CHANGELOG.md](CHANGELOG.md)
+Release process for maintainers is documented in [RELEASING.md](RELEASING.md).
 
-Legacy bash installer: `install.sh` (Linux/systemd only, kept for reference)
-
----
+Legacy script-based installer history is preserved in `install.sh`.
 
 ## License
 
 [MIT](LICENSE)
 
----
-
 ## Disclaimer
 
-Not affiliated with IIT Jodhpur. Use responsibly.
+This project is not affiliated with IIT Jodhpur.
