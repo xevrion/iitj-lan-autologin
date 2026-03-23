@@ -167,6 +167,8 @@ Platform-specific service setup:
 - macOS: launchd agent
 - Windows: Task Scheduler task
 
+On Windows, the scheduled background login runs without opening a recurring console window during reconnect checks.
+
 ## How the login flow works
 
 FortiGate intercepts a normal HTTP request from an unauthenticated client and returns a redirect flow that eventually exposes a one-time authentication token.

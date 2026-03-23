@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/iitj/iitj-lan-autologin/internal/procutil"
 )
 
 const (
@@ -25,7 +27,9 @@ func FlushDNSCache() {
 	case "darwin":
 		flushDarwin()
 	case "windows":
-		exec.Command("ipconfig", "/flushdns").Run()
+		cmd := exec.Command("ipconfig", "/flushdns")
+		procutil.Prepare(cmd)
+		cmd.Run()
 	}
 }
 
@@ -109,7 +113,9 @@ func resolveViaInterface(hostname, ifaceIP string) string {
 
 // run executes a command, returning an error if it fails.
 func run(name string, args ...string) error {
-	out, err := exec.Command(name, args...).CombinedOutput()
+	cmd := exec.Command(name, args...)
+	procutil.Prepare(cmd)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %w: %s", name, err, strings.TrimSpace(string(out)))
 	}

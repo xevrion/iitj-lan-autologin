@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"github.com/iitj/iitj-lan-autologin/internal/procutil"
 )
 
 // NetInterface holds the detected ethernet interface details.
@@ -183,7 +185,9 @@ func getGatewayDarwin(ifaceName string) string {
 func detectWindows() (NetInterface, error) {
 	// Use PowerShell to find connected ethernet adapters
 	script := `Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.PhysicalMediaType -eq '802.3' } | Select-Object -First 1 -ExpandProperty Name`
-	out, err := exec.Command("powershell", "-NoProfile", "-Command", script).Output()
+	cmd := exec.Command("powershell", "-NoProfile", "-Command", script)
+	procutil.Prepare(cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		return NetInterface{}, fmt.Errorf("powershell failed: %w", err)
 	}
@@ -208,7 +212,9 @@ func GetInterfaceIPWindows(adapterName string) (string, error) {
 		`(Get-NetIPAddress -InterfaceAlias '%s' -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object -First 1).IPAddress`,
 		adapterName,
 	)
-	out, err := exec.Command("powershell", "-NoProfile", "-Command", script).Output()
+	cmd := exec.Command("powershell", "-NoProfile", "-Command", script)
+	procutil.Prepare(cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("could not get IP for %s: %w", adapterName, err)
 	}
@@ -224,7 +230,9 @@ func getGatewayWindows(adapterName string) string {
 		`(Get-NetRoute -InterfaceAlias '%s' -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Select-Object -First 1).NextHop`,
 		adapterName,
 	)
-	out, err := exec.Command("powershell", "-NoProfile", "-Command", script).Output()
+	cmd := exec.Command("powershell", "-NoProfile", "-Command", script)
+	procutil.Prepare(cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}

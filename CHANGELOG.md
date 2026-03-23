@@ -2,6 +2,11 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.0.7 - 2026-03-23
+
+- Fixed the Windows reconnect loop so internal `ipconfig` and PowerShell helper commands run hidden instead of flashing a console window.
+- Reused the same hidden-process rule across Windows detection and DNS cache refresh paths.
+
 ## v4.0.6 - 2026-03-23
 
 - Fixed Windows background mode so `login` detaches from the visible console and behaves like a real background task.
