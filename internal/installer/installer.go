@@ -62,22 +62,8 @@ func Run() error {
 	fmt.Println()
 
 	// Step 3 — collect and store credentials.
-	fmt.Println("Enter your IITJ LDAP credentials:")
-	username, err := prompt("  Username: ", false)
-	if err != nil {
-		return fmt.Errorf("read username: %w", err)
-	}
-	password, err := prompt("  Password: ", true)
-	if err != nil {
-		return fmt.Errorf("read password: %w", err)
-	}
-	fmt.Println()
-
-	if err := creds.SaveCredentials(creds.Credentials{
-		Username: username,
-		Password: password,
-	}); err != nil {
-		return fmt.Errorf("save credentials: %w", err)
+	if err := configureCredentials(); err != nil {
+		return err
 	}
 
 	// Step 4 — save config.
@@ -120,6 +106,46 @@ func Run() error {
 	return nil
 }
 
+func configureCredentials() error {
+	if creds.HasCredentials() {
+		stored, err := creds.LoadCredentials()
+		if err == nil {
+			fmt.Printf("Stored credentials found for %s.\n", stored.Username)
+			keepExisting, err := promptYesNo("Use the stored credentials? [Y/n]: ", true)
+			if err != nil {
+				return fmt.Errorf("read credential choice: %w", err)
+			}
+			fmt.Println()
+			if keepExisting {
+				return nil
+			}
+		} else {
+			fmt.Printf("Stored credentials exist but could not be read: %v\n", err)
+			fmt.Println("You will be asked to enter them again.")
+			fmt.Println()
+		}
+	}
+
+	fmt.Println("Enter your IITJ LDAP credentials:")
+	username, err := prompt("  Username: ", false)
+	if err != nil {
+		return fmt.Errorf("read username: %w", err)
+	}
+	password, err := prompt("  Password: ", true)
+	if err != nil {
+		return fmt.Errorf("read password: %w", err)
+	}
+	fmt.Println()
+
+	if err := creds.SaveCredentials(creds.Credentials{
+		Username: username,
+		Password: password,
+	}); err != nil {
+		return fmt.Errorf("save credentials: %w", err)
+	}
+	return nil
+}
+
 func detectInterface() (detect.NetInterface, error) {
 	iface, err := detect.DetectEthernetInterface()
 	if err == nil {
@@ -154,6 +180,30 @@ func prompt(text string, secret bool) (string, error) {
 	r := bufio.NewReader(os.Stdin)
 	line, err := r.ReadString('\n')
 	return strings.TrimSpace(line), err
+}
+
+func promptYesNo(text string, defaultYes bool) (bool, error) {
+	answer, err := prompt(text, false)
+	if err != nil {
+		return false, err
+	}
+	return parseYesNo(answer, defaultYes), nil
+}
+
+func parseYesNo(answer string, defaultYes bool) bool {
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "":
+		return defaultYes
+	case "y", "yes":
+		return true
+	case "n", "no":
+		return false
+	default:
+		if defaultYes {
+			return true
+		}
+		return false
+	}
 }
 
 // readPassword reads a password without echoing it to the terminal.

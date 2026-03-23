@@ -97,7 +97,7 @@ That setup flow:
 
 1. detects the active Ethernet interface
 2. applies the network fixes that are needed on the current machine
-3. asks once for IITJ LDAP credentials
+3. asks for IITJ LDAP credentials, or lets you keep the stored ones during a reinstall or update
 4. stores credentials locally in encrypted form
 5. installs the background service
 
