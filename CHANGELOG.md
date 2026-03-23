@@ -2,6 +2,11 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.0.8 - 2026-03-23
+
+- Fixed the Windows bootstrap to resolve the real release asset from the GitHub API instead of assuming a direct download URL.
+- Made the Windows installer use the published release asset list for the current architecture before falling back to source builds.
+
 ## v4.0.7 - 2026-03-23
 
 - Fixed the Windows reconnect loop so internal `ipconfig` and PowerShell helper commands run hidden instead of flashing a console window.

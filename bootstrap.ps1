@@ -43,20 +43,32 @@ function Get-Arch {
 }
 
 $Arch = Get-Arch
+$AssetName = "iitj-login-windows-$Arch.exe"
 
 $Tag = $null
+$AssetUrl = $null
 try {
     $Release = Invoke-RestMethod -Uri $ApiUrl -ErrorAction Stop
     $Tag = $Release.tag_name
+    if ($Release.assets) {
+        $Asset = $Release.assets | Where-Object { $_.name -eq $AssetName } | Select-Object -First 1
+        if ($Asset) {
+            if ($Asset.browser_download_url) {
+                $AssetUrl = $Asset.browser_download_url
+            } elseif ($Asset.url) {
+                $AssetUrl = $Asset.url
+            }
+        }
+    }
 } catch {
     $Tag = $null
 }
 
-if ($Tag) {
-    $BinUrl = "$Repo/releases/download/$Tag/iitj-login-windows-$Arch.exe"
+if ($Tag -and $AssetUrl) {
     Write-Host "Downloading release binary $Tag..."
     try {
-        Invoke-WebRequest -Uri $BinUrl -OutFile "$InstDir\$Binary" -UseBasicParsing -ErrorAction Stop
+        $headers = @{ "User-Agent" = "iitj-login-bootstrap" }
+        Invoke-WebRequest -Uri $AssetUrl -Headers $headers -OutFile "$InstDir\$Binary" -UseBasicParsing -ErrorAction Stop
         Write-Host "Installed to $InstDir\$Binary"
     } catch {
         Remove-Item "$InstDir\$Binary" -Force -ErrorAction SilentlyContinue
