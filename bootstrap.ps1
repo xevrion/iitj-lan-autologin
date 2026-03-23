@@ -46,7 +46,7 @@ function Get-Arch {
 
 $Arch = Get-Arch
 $AssetName = "iitj-login-windows-$Arch.exe"
-$DownloadError = $null
+$InstallError = $null
 
 function Download-ReleaseBinary {
     param(
@@ -114,11 +114,37 @@ function Stop-InstalledTask {
     }
 
     if (Test-Path $BinaryPath) {
+        try {
+            taskkill /f /t /im "iitj-login.exe" *> $null
+        } catch {
+        }
         Get-Process -Name "iitj-login" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Milliseconds 500
+        Wait-ForBinaryUnlock -Path $BinaryPath
     }
 
     return $task
+}
+
+function Wait-ForBinaryUnlock {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        return
+    }
+
+    for ($i = 0; $i -lt 30; $i++) {
+        try {
+            $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+            $stream.Dispose()
+            return
+        } catch {
+            Start-Sleep -Milliseconds 500
+        }
+    }
+
+    throw ("Timed out waiting for {0} to be released by another process." -f $Path)
 }
 
 function Install-BinaryFile {
@@ -128,6 +154,7 @@ function Install-BinaryFile {
     )
 
     if (Test-Path $DestinationPath) {
+        Wait-ForBinaryUnlock -Path $DestinationPath
         Remove-Item $DestinationPath -Force -ErrorAction Stop
     }
 
@@ -177,7 +204,8 @@ if ($Tag -and $AssetUrl) {
         Write-Host "Installed to $TargetPath"
     } catch {
         Remove-Item $downloadPath -Force -ErrorAction SilentlyContinue
-        $DownloadError = $_.Exception.Message
+        $InstallError = $_.Exception.Message
+        Start-InstalledTaskIfNeeded -PreviousTask $taskBeforeInstall
         $Tag = $null
     }
 }
@@ -187,8 +215,8 @@ if (-not $Tag) {
     $GitPath = Get-Command git -ErrorAction SilentlyContinue
 
     if (-not $GoPath -or -not $GitPath) {
-        if ($DownloadError) {
-            Write-Error ("Release download failed for windows/{0}: {1}`nSource build fallback is unavailable because go and git were not found." -f $Arch, $DownloadError)
+        if ($InstallError) {
+            Write-Error ("Release install failed for windows/{0}: {1}`nSource build fallback is unavailable because go and git were not found." -f $Arch, $InstallError)
         } else {
             Write-Error ("No release binary found for windows/{0} and source build fallback is unavailable." -f $Arch)
         }

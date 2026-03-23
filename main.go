@@ -12,7 +12,7 @@ import (
 	"github.com/iitj/iitj-lan-autologin/internal/service"
 )
 
-const version = "4.0.11"
+const version = "4.0.12"
 
 const usage = `iitj-login — IITJ Ethernet Auto Login
 

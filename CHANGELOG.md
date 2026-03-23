@@ -2,6 +2,11 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.0.12 - 2026-03-23
+
+- Fixed Windows bootstrap upgrades to wait for `iitj-login.exe` to fully release its file lock before replacement.
+- Added stronger Windows shutdown handling during upgrades, including forced process termination and clearer install-failure reporting.
+
 ## v4.0.11 - 2026-03-23
 
 - Fixed Windows binary updates so the bootstrap stops the existing scheduled task before replacing `iitj-login.exe`.
