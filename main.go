@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/iitj/iitj-lan-autologin/internal/creds"
 	"github.com/iitj/iitj-lan-autologin/internal/installer"
@@ -11,7 +12,7 @@ import (
 	"github.com/iitj/iitj-lan-autologin/internal/service"
 )
 
-const version = "4.0.2"
+const version = "4.0.3"
 
 const usage = `iitj-login — IITJ Ethernet Auto Login
 
@@ -44,16 +45,16 @@ func main() {
 	case "uninstall":
 		svc := service.New()
 		if err := svc.Uninstall(); err != nil {
-			fmt.Fprintf(os.Stderr, "uninstall failed: %v\n", err)
+			printError("uninstall failed", err)
 			os.Exit(1)
 		}
 		if err := creds.RemoveAll(); err != nil {
-			fmt.Fprintf(os.Stderr, "uninstall warning: remove data: %v\n", err)
+			printWarn("uninstall warning", fmt.Sprintf("remove data: %v", err))
 		}
 		if err := manual.Remove(); err != nil {
-			fmt.Fprintf(os.Stderr, "uninstall warning: remove man page: %v\n", err)
+			printWarn("uninstall warning", fmt.Sprintf("remove man page: %v", err))
 		}
-		fmt.Println("Uninstalled.")
+		printSuccess("Uninstalled.")
 
 	case "login":
 		if err := login.RunLoop(); err != nil {
@@ -64,18 +65,18 @@ func main() {
 	case "start":
 		svc := service.New()
 		if err := svc.Start(); err != nil {
-			fmt.Fprintf(os.Stderr, "start failed: %v\n", err)
+			printError("start failed", err)
 			os.Exit(1)
 		}
-		fmt.Println("Started.")
+		printSuccess("Started.")
 
 	case "stop":
 		svc := service.New()
 		if err := svc.Stop(); err != nil {
-			fmt.Fprintf(os.Stderr, "stop failed: %v\n", err)
+			printError("stop failed", err)
 			os.Exit(1)
 		}
-		fmt.Println("Stopped.")
+		printSuccess("Stopped.")
 
 	case "status":
 		svc := service.New()
@@ -84,7 +85,8 @@ func main() {
 			fmt.Fprintf(os.Stderr, "status failed: %v\n", err)
 			os.Exit(1)
 		}
-		out, err := service.StatusReport(version, info)
+		recentLogs, _ := svc.RecentLogs(8)
+		out, err := service.StatusReport(version, info, recentLogs)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "status failed: %v\n", err)
 			os.Exit(1)
@@ -92,10 +94,45 @@ func main() {
 		fmt.Print(out)
 
 	case "version":
-		fmt.Printf("iitj-login v%s\n", version)
+		fmt.Printf("%s %s\n", color("1;36", "iitj-login"), color("2", "v"+version))
 
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n%s", os.Args[1], usage)
+		printError("unknown command", os.Args[1])
+		fmt.Fprintf(os.Stderr, "\n%s", usage)
 		os.Exit(1)
 	}
+}
+
+func printSuccess(msg string) {
+	fmt.Println(color("32", msg))
+}
+
+func printWarn(label, msg string) {
+	fmt.Fprintf(os.Stderr, "%s: %s\n", color("33", label), msg)
+}
+
+func printError(label string, err interface{}) {
+	fmt.Fprintf(os.Stderr, "%s: %v\n", color("31", label), err)
+}
+
+func color(code, s string) string {
+	if !useColor() {
+		return s
+	}
+	return "\033[" + code + "m" + s + "\033[0m"
+}
+
+func useColor() bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	info, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	if info.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	term := os.Getenv("TERM")
+	return term != "" && term != "dumb" && !strings.EqualFold(term, "unknown")
 }

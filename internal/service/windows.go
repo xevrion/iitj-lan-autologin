@@ -75,7 +75,7 @@ func (w *WindowsTaskService) StatusInfo() (StatusInfo, error) {
 		ServiceName:    windowsTaskName,
 		Installed:      installed,
 		Startup:        "not installed",
-		LogHint:        "schtasks /query /tn IITJ-LAN-AutoLogin /fo list /v",
+		LogHint:        "Task Scheduler operational log",
 	}
 	if !installed {
 		return info, nil
@@ -95,6 +95,17 @@ func (w *WindowsTaskService) StatusInfo() (StatusInfo, error) {
 	}
 
 	return info, nil
+}
+
+func (w *WindowsTaskService) RecentLogs(lines int) ([]string, error) {
+	out, err := exec.Command(
+		"powershell", "-NoProfile", "-Command",
+		fmt.Sprintf(`$n=%d; Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational -MaxEvents 50 | Where-Object { $_.Message -like '*%s*' } | Select-Object -First $n | ForEach-Object { $_.TimeCreated.ToString('s') + ' ' + $_.Message.Replace("`+"`r`n"+`", ' ') }`, lines, windowsTaskName),
+	).CombinedOutput()
+	if err != nil {
+		return nil, nil
+	}
+	return trimLogLines(string(out), lines), nil
 }
 
 func (w *WindowsTaskService) IsInstalled() (bool, error) {
@@ -122,4 +133,20 @@ func parseWindowsList(s string) map[string]string {
 		out[strings.TrimSpace(key)] = strings.TrimSpace(value)
 	}
 	return out
+}
+
+func trimLogLines(s string, lines int) []string {
+	raw := strings.Split(s, "\n")
+	out := make([]string, 0, lines)
+	for _, line := range raw {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		out = append(out, line)
+	}
+	if len(out) <= lines {
+		return out
+	}
+	return out[len(out)-lines:]
 }

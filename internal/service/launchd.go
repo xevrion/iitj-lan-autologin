@@ -123,7 +123,7 @@ func (l *LaunchdService) StatusInfo() (StatusInfo, error) {
 		ServiceName:    launchdLabel,
 		Installed:      installed,
 		Startup:        "not installed",
-		LogHint:        "tail -n 50 /tmp/iitj-login.log",
+		LogHint:        launchdLogFile,
 	}
 	if !installed {
 		return info, nil
@@ -145,6 +145,14 @@ func (l *LaunchdService) StatusInfo() (StatusInfo, error) {
 	}
 
 	return info, nil
+}
+
+func (l *LaunchdService) RecentLogs(lines int) ([]string, error) {
+	data, err := os.ReadFile(launchdLogFile)
+	if err != nil {
+		return nil, nil
+	}
+	return trimLogLines(string(data), lines), nil
 }
 
 func (l *LaunchdService) IsInstalled() (bool, error) {

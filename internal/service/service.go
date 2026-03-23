@@ -15,6 +15,7 @@ type Service interface {
 	Stop() error
 	Status() (string, error)
 	StatusInfo() (StatusInfo, error)
+	RecentLogs(lines int) ([]string, error)
 	IsInstalled() (bool, error)
 }
 
@@ -52,6 +53,7 @@ func (u *UnsupportedService) Status() (string, error)    { return "", u.err() }
 func (u *UnsupportedService) StatusInfo() (StatusInfo, error) {
 	return StatusInfo{}, u.err()
 }
+func (u *UnsupportedService) RecentLogs(_ int) ([]string, error) { return nil, u.err() }
 func (u *UnsupportedService) IsInstalled() (bool, error) { return false, u.err() }
 func (u *UnsupportedService) err() error {
 	return fmt.Errorf("service management not supported on %s", u.os)

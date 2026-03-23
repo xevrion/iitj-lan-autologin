@@ -124,7 +124,7 @@ func (s *SystemdService) StatusInfo() (StatusInfo, error) {
 		ServiceName:    systemdServiceName,
 		Installed:      installed,
 		Startup:        "not installed",
-		LogHint:        "journalctl --user -u iitj-login -n 50 --no-pager",
+		LogHint:        "systemd user journal",
 	}
 	if !installed {
 		return info, nil
@@ -160,6 +160,20 @@ func (s *SystemdService) StatusInfo() (StatusInfo, error) {
 	}
 
 	return info, nil
+}
+
+func (s *SystemdService) RecentLogs(lines int) ([]string, error) {
+	out, err := exec.Command(
+		"journalctl", "--user", "-u", systemdServiceName,
+		"-n", fmt.Sprintf("%d", lines),
+		"--no-pager", "-o", "cat",
+	).CombinedOutput()
+	if err != nil {
+		if len(out) == 0 {
+			return nil, nil
+		}
+	}
+	return trimLogLines(string(out), lines), nil
 }
 
 func (s *SystemdService) IsInstalled() (bool, error) {

@@ -2,6 +2,12 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.0.3 - 2026-03-23
+
+- Added terminal-aware color to user-facing CLI output.
+- Embedded recent service logs directly into `status` on supported platforms.
+- Improved status wording so common states read more naturally for non-technical users.
+
 ## v4.0.2 - 2026-03-23
 
 - Replaced raw service-manager dumps in `status` with a readable cross-platform summary.
