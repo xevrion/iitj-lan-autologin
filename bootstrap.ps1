@@ -103,6 +103,12 @@ Write-Host ""
 if ([System.Environment]::UserInteractive -and [System.Console]::IsInputRedirected -eq $false) {
     Write-Host "Running installer..."
     & "$InstDir\$Binary" install
+    Write-Host ""
+    Write-Host "Installation step complete."
+    Write-Host "Use a normal Command Prompt or normal PowerShell window for daily commands such as:"
+    Write-Host "  iitj-login status"
+    Write-Host "  iitj-login start"
+    Write-Host "  iitj-login stop"
 } else {
     Write-Host "Binary installed. Now run:"
     Write-Host "  iitj-login install"

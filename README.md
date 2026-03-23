@@ -49,13 +49,21 @@ The bootstrap script downloads the latest matching release binary. If no release
 
 ### Windows
 
-Run in PowerShell:
+Run the bootstrap in PowerShell as Administrator:
 
 ```powershell
 irm https://raw.githubusercontent.com/xevrion/iitj-lan-autologin/main/bootstrap.ps1 | iex
 ```
 
 The PowerShell bootstrap downloads the latest matching release binary. If no release asset exists for your platform, it falls back to building from source when `go` and `git` are available.
+
+After installation is complete, use `iitj-login` from a normal Command Prompt or normal PowerShell window for day-to-day commands such as:
+
+```powershell
+iitj-login status
+iitj-login start
+iitj-login stop
+```
 
 ### Build from source
 
@@ -236,7 +244,8 @@ Typical files:
 | Linux | Fedora 39+ | tested |
 | Linux | Ubuntu 22.04+ | tested |
 | macOS | Intel and Apple Silicon code paths | not yet verified on real hardware |
-| Windows | Windows 10 and 11 code paths | not yet verified on real hardware |
+| Windows | Windows 11 | tested |
+| Windows | Windows 10 code paths | not yet verified on real hardware |
 
 Architectures currently released:
 
