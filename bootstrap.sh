@@ -11,11 +11,12 @@
 #        git clone https://github.com/xevrion/iitj-lan-autologin
 #        cd iitj-lan-autologin && go build -o iitj-login . && ./iitj-login install
 
-set -e
+set -euo pipefail
 
 REPO="https://github.com/xevrion/iitj-lan-autologin"
 BINARY="iitj-login"
 INSTALL_DIR="$HOME/.local/bin"
+API_URL="https://api.github.com/repos/xevrion/iitj-lan-autologin/releases/latest"
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -35,30 +36,36 @@ esac
 echo "Detected: $OS/$ARCH"
 mkdir -p "$INSTALL_DIR"
 
-# Build from source if Go is available.
-if command -v go >/dev/null 2>&1; then
-  echo "Go found — building from source..."
-  TMP=$(mktemp -d)
-  trap 'rm -rf "$TMP"' EXIT
-  git clone --depth 1 "$REPO" "$TMP/src"
-  (cd "$TMP/src" && go build -o "$TMP/$BINARY" .)
-  mv "$TMP/$BINARY" "$INSTALL_DIR/$BINARY"
-  chmod +x "$INSTALL_DIR/$BINARY"
-  echo "Installed to $INSTALL_DIR/$BINARY"
-else
-  # Download pre-built binary from GitHub Releases.
-  TAG=$(curl -fsSL "https://api.github.com/repos/xevrion/iitj-lan-autologin/releases/latest" \
-    2>/dev/null | grep '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
-  if [ -z "$TAG" ]; then
-    echo "No releases found. Install Go and re-run, or build manually:"
-    echo "  git clone $REPO && cd iitj-lan-autologin && go build -o iitj-login ."
+TAG=$(curl -fsSL "$API_URL" 2>/dev/null | grep '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' || true)
+ASSET_URL="$REPO/releases/download/$TAG/iitj-login-$OS-$ARCH"
+
+if [ -n "$TAG" ]; then
+  echo "Downloading release binary $TAG..."
+  if curl -fsSL "$ASSET_URL" -o "$INSTALL_DIR/$BINARY"; then
+    chmod +x "$INSTALL_DIR/$BINARY"
+    echo "Installed to $INSTALL_DIR/$BINARY"
+  else
+    rm -f "$INSTALL_DIR/$BINARY"
+    TAG=""
+  fi
+fi
+
+if [ -z "$TAG" ]; then
+  if command -v go >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
+    echo "No downloadable release found for $OS/$ARCH — building from source..."
+    TMP=$(mktemp -d)
+    trap 'rm -rf "$TMP"' EXIT
+    git clone --depth 1 "$REPO" "$TMP/src"
+    (cd "$TMP/src" && go build -o "$TMP/$BINARY" .)
+    mv "$TMP/$BINARY" "$INSTALL_DIR/$BINARY"
+    chmod +x "$INSTALL_DIR/$BINARY"
+    echo "Installed to $INSTALL_DIR/$BINARY"
+  else
+    echo "No release binary found for $OS/$ARCH and source build fallback is unavailable."
+    echo "Install both Go and git, or download a release manually from:"
+    echo "  $REPO/releases"
     exit 1
   fi
-  URL="$REPO/releases/download/$TAG/iitj-login-$OS-$ARCH"
-  echo "Downloading $URL..."
-  curl -fsSL "$URL" -o "$INSTALL_DIR/$BINARY"
-  chmod +x "$INSTALL_DIR/$BINARY"
-  echo "Installed to $INSTALL_DIR/$BINARY"
 fi
 
 echo ""

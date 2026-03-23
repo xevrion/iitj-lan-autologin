@@ -8,6 +8,8 @@ No more dropped SSH sessions. No more failed downloads. No more broken builds.
 
 Cross-platform Go binary — Linux, macOS (Intel + Apple Silicon), Windows.
 
+Versioned binaries are published through GitHub Releases.
+
 ---
 
 ## Installation
@@ -17,6 +19,8 @@ Cross-platform Go binary — Linux, macOS (Intel + Apple Silicon), Windows.
 ```bash
 curl -fsSL https://raw.githubusercontent.com/xevrion/iitj-lan-autologin/main/bootstrap.sh | bash
 ```
+
+The bootstrap script downloads the latest matching release binary and falls back to a source build only when no release asset exists for your platform.
 
 Or build from source (requires Go 1.21+):
 
@@ -32,6 +36,8 @@ go build -o iitj-login .
 ```powershell
 irm https://raw.githubusercontent.com/xevrion/iitj-lan-autologin/main/bootstrap.ps1 | iex
 ```
+
+The PowerShell bootstrap downloads the latest matching release binary and falls back to a source build only when no release asset exists for your platform.
 
 Or build from source:
 
@@ -172,9 +178,11 @@ Architectures: amd64, arm64 (Apple Silicon, Raspberry Pi)
 
 ---
 
-## Version
+## Releases
 
-v4.0.0 (Go cross-platform rewrite)
+Current binary release line: `v4.0.0`
+
+Release history: [CHANGELOG.md](CHANGELOG.md)
 
 Legacy bash installer: `install.sh` (Linux/systemd only, kept for reference)
 

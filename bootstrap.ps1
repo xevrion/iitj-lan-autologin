@@ -8,16 +8,49 @@ $ErrorActionPreference = "Stop"
 $Repo    = "https://github.com/xevrion/iitj-lan-autologin"
 $Binary  = "iitj-login.exe"
 $InstDir = "$env:LOCALAPPDATA\Programs\iitj-login"
+$ApiUrl  = "https://api.github.com/repos/xevrion/iitj-lan-autologin/releases/latest"
 
 Write-Host "IITJ LAN Auto Login — Windows Installer"
 Write-Host "========================================`n"
 
 New-Item -ItemType Directory -Force -Path $InstDir | Out-Null
 
-# Build from source if Go is available.
-$GoPath = Get-Command go -ErrorAction SilentlyContinue
-if ($GoPath) {
-    Write-Host "Go found — building from source..."
+$Arch = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
+    "X64"   { "amd64" }
+    "Arm64" { "arm64" }
+    default { throw "Unsupported architecture: $([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)" }
+}
+
+$Tag = $null
+try {
+    $Release = Invoke-RestMethod -Uri $ApiUrl -ErrorAction Stop
+    $Tag = $Release.tag_name
+} catch {
+    $Tag = $null
+}
+
+if ($Tag) {
+    $BinUrl = "$Repo/releases/download/$Tag/iitj-login-windows-$Arch.exe"
+    Write-Host "Downloading release binary $Tag..."
+    try {
+        Invoke-WebRequest -Uri $BinUrl -OutFile "$InstDir\$Binary" -UseBasicParsing -ErrorAction Stop
+        Write-Host "Installed to $InstDir\$Binary"
+    } catch {
+        Remove-Item "$InstDir\$Binary" -Force -ErrorAction SilentlyContinue
+        $Tag = $null
+    }
+}
+
+if (-not $Tag) {
+    $GoPath = Get-Command go -ErrorAction SilentlyContinue
+    $GitPath = Get-Command git -ErrorAction SilentlyContinue
+
+    if (-not $GoPath -or -not $GitPath) {
+        Write-Error "No release binary found for windows/$Arch and source build fallback is unavailable."
+        exit 1
+    }
+
+    Write-Host "No downloadable release found for windows/$Arch — building from source..."
     $Tmp = [System.IO.Path]::GetTempPath() + [System.Guid]::NewGuid().ToString()
     New-Item -ItemType Directory -Path $Tmp | Out-Null
     try {
@@ -30,21 +63,6 @@ if ($GoPath) {
     } finally {
         Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue
     }
-} else {
-    # Download pre-built binary from GitHub Releases.
-    $ApiUrl  = "https://api.github.com/repos/xevrion/iitj-lan-autologin/releases/latest"
-    $Release = Invoke-RestMethod -Uri $ApiUrl -ErrorAction Stop
-    $Tag     = $Release.tag_name
-
-    if (-not $Tag) {
-        Write-Error "No releases found. Install Go and re-run, or build manually."
-        exit 1
-    }
-
-    $BinUrl = "$Repo/releases/download/$Tag/iitj-login-windows-amd64.exe"
-    Write-Host "Downloading $BinUrl..."
-    Invoke-WebRequest -Uri $BinUrl -OutFile "$InstDir\$Binary" -UseBasicParsing
-    Write-Host "Installed to $InstDir\$Binary"
 }
 
 # Add install dir to user PATH if not already there.
