@@ -219,6 +219,7 @@ Typical files:
 - `credentials.enc`
 - `key.bin`
 - `config.json`
+- `service.log` on Windows for background login output
 
 ## Platform support
 

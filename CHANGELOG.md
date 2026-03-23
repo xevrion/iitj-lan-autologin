@@ -2,6 +2,12 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.0.6 - 2026-03-23
+
+- Fixed Windows background mode so `login` detaches from the visible console and behaves like a real background task.
+- Switched Windows status logs to the application's own `service.log` file instead of Task Scheduler event entries.
+- Stopped showing Task Scheduler's `267009` running code as a misleading error-like last exit value.
+
 ## v4.0.5 - 2026-03-23
 
 - Fixed the Windows bootstrap so the current PowerShell session can use `iitj-login` immediately after installation.

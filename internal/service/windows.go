@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -75,7 +76,7 @@ func (w *WindowsTaskService) StatusInfo() (StatusInfo, error) {
 		ServiceName:    windowsTaskName,
 		Installed:      installed,
 		Startup:        "not installed",
-		LogHint:        "Task Scheduler operational log",
+		LogHint:        "service log file",
 	}
 	if !installed {
 		return info, nil
@@ -90,7 +91,10 @@ func (w *WindowsTaskService) StatusInfo() (StatusInfo, error) {
 	props := parseWindowsList(string(out))
 	status := strings.ToLower(props["Status"])
 	info.Running = strings.Contains(status, "running")
-	if lastResult := props["Last Result"]; lastResult != "" && lastResult != "0" && lastResult != "The operation completed successfully." {
+	if logPath, err := backgroundLogPath(); err == nil {
+		info.LogHint = logPath
+	}
+	if lastResult := props["Last Result"]; shouldShowWindowsLastResult(lastResult, info.Running) {
 		info.LastExit = lastResult
 	}
 
@@ -98,14 +102,15 @@ func (w *WindowsTaskService) StatusInfo() (StatusInfo, error) {
 }
 
 func (w *WindowsTaskService) RecentLogs(lines int) ([]string, error) {
-	out, err := exec.Command(
-		"powershell", "-NoProfile", "-Command",
-		fmt.Sprintf(`$n=%d; Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational -MaxEvents 50 | Where-Object { $_.Message -like '*%s*' } | Select-Object -First $n | ForEach-Object { $_.TimeCreated.ToString('s') + ' ' + $_.Message.Replace("`+"`r`n"+`", ' ') }`, lines, windowsTaskName),
-	).CombinedOutput()
+	path, err := backgroundLogPath()
 	if err != nil {
 		return nil, nil
 	}
-	return trimLogLines(string(out), lines), nil
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil
+	}
+	return trimLogLines(string(data), lines), nil
 }
 
 func (w *WindowsTaskService) IsInstalled() (bool, error) {
@@ -149,4 +154,15 @@ func trimLogLines(s string, lines int) []string {
 		return out
 	}
 	return out[len(out)-lines:]
+}
+
+func shouldShowWindowsLastResult(lastResult string, running bool) bool {
+	lastResult = strings.TrimSpace(lastResult)
+	if lastResult == "" || lastResult == "0" || lastResult == "The operation completed successfully." {
+		return false
+	}
+	if running && (lastResult == "267009" || strings.EqualFold(lastResult, "0x41301")) {
+		return false
+	}
+	return true
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/iitj/iitj-lan-autologin/internal/service"
 )
 
-const version = "4.0.5"
+const version = "4.0.6"
 
 const usage = `iitj-login — IITJ Ethernet Auto Login
 
@@ -57,6 +57,7 @@ func main() {
 		printSuccess("Uninstalled.")
 
 	case "login":
+		service.PrepareBackgroundProcess("login")
 		if err := login.RunLoop(); err != nil {
 			fmt.Fprintf(os.Stderr, "login loop error: %v\n", err)
 			os.Exit(1)
