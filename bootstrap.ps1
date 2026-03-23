@@ -15,11 +15,34 @@ Write-Host "========================================`n"
 
 New-Item -ItemType Directory -Force -Path $InstDir | Out-Null
 
-$Arch = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
-    "X64"   { "amd64" }
-    "Arm64" { "arm64" }
-    default { throw "Unsupported architecture: $([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)" }
+function Get-Arch {
+    if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64" -or $env:PROCESSOR_ARCHITEW6432 -eq "ARM64") {
+        return "arm64"
+    }
+
+    if ([System.Environment]::Is64BitOperatingSystem) {
+        return "amd64"
+    }
+
+    try {
+        $runtimeInfo = [System.Type]::GetType("System.Runtime.InteropServices.RuntimeInformation")
+        if ($runtimeInfo) {
+            $osArch = $runtimeInfo.GetProperty("OSArchitecture")
+            if ($osArch) {
+                $value = $osArch.GetValue($null).ToString()
+                switch ($value) {
+                    "X64"   { return "amd64" }
+                    "Arm64" { return "arm64" }
+                }
+            }
+        }
+    } catch {
+    }
+
+    throw "Unsupported architecture for this installer."
 }
+
+$Arch = Get-Arch
 
 $Tag = $null
 try {

@@ -2,6 +2,11 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.0.4 - 2026-03-23
+
+- Fixed the Windows PowerShell bootstrap on environments where `RuntimeInformation.OSArchitecture` is unavailable.
+- Switched architecture detection to older-compatible Windows and PowerShell signals first, with the newer .NET path only as fallback.
+
 ## v4.0.3 - 2026-03-23
 
 - Added terminal-aware color to user-facing CLI output.
