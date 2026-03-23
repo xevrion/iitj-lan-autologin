@@ -2,6 +2,11 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.0.10 - 2026-03-23
+
+- Fixed a PowerShell parser error in the Windows bootstrap by replacing fragile `$Arch:` string interpolation with explicit formatting.
+- Hardened the Windows bootstrap messages so architecture-specific errors and fallback notices do not break script execution.
+
 ## v4.0.9 - 2026-03-23
 
 - Hardened the Windows bootstrap download path by forcing TLS 1.2 and falling back from `Invoke-WebRequest` to `WebClient`.

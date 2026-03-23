@@ -113,14 +113,14 @@ if (-not $Tag) {
 
     if (-not $GoPath -or -not $GitPath) {
         if ($DownloadError) {
-            Write-Error "Release download failed for windows/$Arch: $DownloadError`nSource build fallback is unavailable because go and git were not found."
+            Write-Error ("Release download failed for windows/{0}: {1}`nSource build fallback is unavailable because go and git were not found." -f $Arch, $DownloadError)
         } else {
-            Write-Error "No release binary found for windows/$Arch and source build fallback is unavailable."
+            Write-Error ("No release binary found for windows/{0} and source build fallback is unavailable." -f $Arch)
         }
         exit 1
     }
 
-    Write-Host "No downloadable release found for windows/$Arch — building from source..."
+    Write-Host ("No downloadable release found for windows/{0} - building from source..." -f $Arch)
     $Tmp = [System.IO.Path]::GetTempPath() + [System.Guid]::NewGuid().ToString()
     New-Item -ItemType Directory -Path $Tmp | Out-Null
     try {
