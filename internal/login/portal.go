@@ -180,7 +180,7 @@ func extractToken(body string) string {
 	}
 	rest := body[idx+len(marker):]
 	// Token ends at the first quote, double-quote, or whitespace.
-	end := strings.IndexAny(rest, `"' \t\n\r`)
+	end := strings.IndexAny(rest, "\"' \t\n\r")
 	if end == -1 {
 		return strings.TrimSpace(rest)
 	}
