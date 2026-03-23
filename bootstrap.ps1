@@ -4,6 +4,7 @@
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $Repo    = "https://github.com/xevrion/iitj-lan-autologin"
 $Binary  = "iitj-login.exe"
@@ -44,6 +45,36 @@ function Get-Arch {
 
 $Arch = Get-Arch
 $AssetName = "iitj-login-windows-$Arch.exe"
+$DownloadError = $null
+
+function Download-ReleaseBinary {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][string]$OutFile
+    )
+
+    $headers = @{ "User-Agent" = "iitj-login-bootstrap" }
+
+    try {
+        Invoke-WebRequest -Uri $Uri -Headers $headers -OutFile $OutFile -UseBasicParsing -ErrorAction Stop
+        return
+    } catch {
+        $primaryError = $_.Exception.Message
+    }
+
+    try {
+        $webClient = New-Object System.Net.WebClient
+        $webClient.Headers.Add("User-Agent", "iitj-login-bootstrap")
+        $webClient.DownloadFile($Uri, $OutFile)
+        return
+    } catch {
+        throw "Invoke-WebRequest failed: $primaryError; WebClient failed: $($_.Exception.Message)"
+    } finally {
+        if ($webClient) {
+            $webClient.Dispose()
+        }
+    }
+}
 
 $Tag = $null
 $AssetUrl = $null
@@ -67,11 +98,11 @@ try {
 if ($Tag -and $AssetUrl) {
     Write-Host "Downloading release binary $Tag..."
     try {
-        $headers = @{ "User-Agent" = "iitj-login-bootstrap" }
-        Invoke-WebRequest -Uri $AssetUrl -Headers $headers -OutFile "$InstDir\$Binary" -UseBasicParsing -ErrorAction Stop
+        Download-ReleaseBinary -Uri $AssetUrl -OutFile "$InstDir\$Binary"
         Write-Host "Installed to $InstDir\$Binary"
     } catch {
         Remove-Item "$InstDir\$Binary" -Force -ErrorAction SilentlyContinue
+        $DownloadError = $_.Exception.Message
         $Tag = $null
     }
 }
@@ -81,7 +112,11 @@ if (-not $Tag) {
     $GitPath = Get-Command git -ErrorAction SilentlyContinue
 
     if (-not $GoPath -or -not $GitPath) {
-        Write-Error "No release binary found for windows/$Arch and source build fallback is unavailable."
+        if ($DownloadError) {
+            Write-Error "Release download failed for windows/$Arch: $DownloadError`nSource build fallback is unavailable because go and git were not found."
+        } else {
+            Write-Error "No release binary found for windows/$Arch and source build fallback is unavailable."
+        }
         exit 1
     }
 

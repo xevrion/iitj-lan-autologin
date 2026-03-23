@@ -2,6 +2,11 @@
 
 All notable releases for `iitj-login` are tracked here.
 
+## v4.0.9 - 2026-03-23
+
+- Hardened the Windows bootstrap download path by forcing TLS 1.2 and falling back from `Invoke-WebRequest` to `WebClient`.
+- Made Windows bootstrap failures report the real release download error instead of the misleading generic "no release binary found" message.
+
 ## v4.0.8 - 2026-03-23
 
 - Fixed the Windows bootstrap to resolve the real release asset from the GitHub API instead of assuming a direct download URL.
