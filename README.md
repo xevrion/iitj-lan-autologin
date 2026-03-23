@@ -1,5 +1,10 @@
 # IITJ LAN Auto Login
 
+[![Release](https://img.shields.io/github/v/release/xevrion/iitj-lan-autologin)](https://github.com/xevrion/iitj-lan-autologin/releases)
+[![Release Workflow](https://img.shields.io/github/actions/workflow/status/xevrion/iitj-lan-autologin/release.yml?label=release)](https://github.com/xevrion/iitj-lan-autologin/actions/workflows/release.yml)
+[![Go Version](https://img.shields.io/badge/go-1.21%2B-00ADD8?logo=go)](https://go.dev/)
+[![License](https://img.shields.io/github/license/xevrion/iitj-lan-autologin)](LICENSE)
+
 `iitj-login` keeps the IIT Jodhpur hostel Ethernet session alive by logging back into the FortiGate captive portal before the session expires.
 
 It is built for the actual failure modes that make this network annoying to use in practice: expiring sessions, Docker subnet conflicts, MAC randomization, WiFi stealing portal traffic, and DNS returning the wrong address for the gateway.
