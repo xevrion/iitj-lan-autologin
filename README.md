@@ -226,6 +226,15 @@ Typical files:
 | macOS | launchd agent | supported |
 | Windows 10 and 11 | Task Scheduler | supported |
 
+## Tested on
+
+| Platform | Environment | Status |
+| --- | --- | --- |
+| Linux | Fedora 39+ | tested |
+| Linux | Ubuntu 22.04+ | tested |
+| macOS | Intel and Apple Silicon code paths | not yet verified on real hardware |
+| Windows | Windows 10 and 11 code paths | not yet verified on real hardware |
+
 Architectures currently released:
 
 - `linux/amd64`
